@@ -1,0 +1,148 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { BookOpen, Loader2, RefreshCw, AlertCircle } from "lucide-react"
+import { useDebounce } from "@/hooks/use-debounce"
+
+interface PlotSummaryProps {
+  content: string
+}
+
+export function PlotSummary({ content }: PlotSummaryProps) {
+  const [summary, setSummary] = useState<string>("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>("")
+  const [lastAnalyzedContent, setLastAnalyzedContent] = useState("")
+
+  // Debounce the incoming content to avoid heavy work on every keystroke
+  const debouncedContent = useDebounce(content, 1500)
+
+  const generateSummary = async () => {
+    const text = content.replace(/<[^>]*>/g, "").trim()
+
+    if (!text || text.length < 100) {
+      setSummary("Write more content to generate a plot summary...")
+      setError("")
+      return
+    }
+
+    if (text === lastAnalyzedContent) {
+      return // Don't re-analyze the same content
+    }
+
+    setLoading(true)
+    setError("")
+    try {
+      const response = await fetch("/api/plot-summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to generate summary")
+      }
+
+      const data = await response.json()
+      setSummary(data.summary)
+      setLastAnalyzedContent(text)
+    } catch (error) {
+      console.error("Plot summary error:", error)
+      setError("Unable to generate plot summary. Please try again.")
+      setSummary("")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Trigger summary generation only after the debounced content changes
+  useEffect(() => {
+    const text = debouncedContent.replace(/<[^>]*>/g, "").trim()
+
+    if (text.length > 100 && text !== lastAnalyzedContent) {
+      generateSummary()
+    }
+  }, [debouncedContent, lastAnalyzedContent])
+
+  const formatBulletPoints = (text: string) => {
+    // Split by bullet points and filter out empty lines
+    const points = text
+      .split(/(?:^|\n)(?:[•\-\*]\s*)/gm)
+      .filter(point => point.trim().length > 0)
+      .map(point => point.trim())
+
+    return points
+  }
+
+  const bulletPoints = summary ? formatBulletPoints(summary) : []
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="text-center">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Plot Summary</h3>
+        <button
+          onClick={generateSummary}
+          disabled={loading}
+          className="inline-flex items-center px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Refresh Summary
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-4 min-h-32">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            <span className="ml-2 text-sm text-gray-600">Generating plot summary...</span>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center py-8">
+            <AlertCircle className="h-6 w-6 text-red-500 mr-2" />
+            <span className="text-sm text-red-600">{error}</span>
+          </div>
+        ) : bulletPoints.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <BookOpen className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-gray-900">Story Overview</span>
+            </div>
+            <div className="space-y-2">
+              {bulletPoints.map((point, index) => (
+                <div key={index} className="flex items-start space-x-2">
+                  <span className="text-blue-600 font-bold mt-0.5">•</span>
+                  <p className="text-sm text-gray-700 leading-relaxed flex-1">
+                    {point}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-sm text-gray-600">Write more content to generate a plot summary.</p>
+            <p className="text-xs text-gray-500 mt-1">Minimum 100 words required.</p>
+          </div>
+        )}
+      </div>
+
+      {bulletPoints.length > 0 && !loading && !error && (
+        <div className="text-xs text-gray-500 text-center">
+          Summary generated by AI • Updates automatically as you write
+        </div>
+      )}
+    </div>
+  )
+}

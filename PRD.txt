@@ -1,0 +1,124 @@
+﻿[X] Phase 1: Foundation
+[X] Set up project repository and dev environment
+[ ] Initialize GitHub repo with README and license
+[X] Set up development environment with TypeScript, Vite, React 18
+[X] Configure Tailwind CSS
+[X] Set up Firebase project with Auth, Firestore, Hosting
+[X] Implement user authentication
+[X] Enable Firebase Auth with email/password
+[X] Create signup page
+[X] Create login page
+[X] Implement logout functionality
+[X] Create base document data model
+[X] Define Firestore schema for documents
+[X] Include fields: title, content, createdAt, updatedAt, wordCount
+[X] Phase 2: Data Layer
+[X] Implement document management backend
+[X] Create new documents in Firestore
+[X] Fetch list of user documents
+[X] Update existing documents with edits
+[X] Delete documents from Firestore
+[~] Add document search & sort features
+[ ] Enable keyword search by title
+[ ] Implement sorting by creation date, modified date, word count
+[~] Implement file upload support
+[ ] Accept .txt, .doc, and .docx files
+[ ] Parse and convert to plain text or HTML for editing
+[~] Implement character tracking backend
+[~] Detect proper nouns and capitalized names
+[ ] Store detected characters with positions and metadata
+[X] Phase 3: Interface Layer
+[X] Create responsive dashboard view
+[X] Display document cards or list with metadata
+[X] Allow click-through to editor view
+[X] Build standalone web-based text editor
+[X] Enable basic rich text formatting (bold, italic, underline)
+[X] Support chapter and scene headings
+[X] Implement word count and autosave
+[X] Add export functionality
+[X] Export document as .txt file
+[X] Export document as .docx file
+[X] Export document as .pdf file
+[~] Build character profile interface
+[X] Show detected characters in sidebar tab
+[ ] Allow users to edit age, appearance, notes
+[ ] Add "Change Character Name" button
+[ ] Implement preview and confirmation pop-up
+[ ] Replace all occurrences of character name in document
+[X] Phase 4: Implementation Layer
+[X] Implement advanced grammar and style correction
+[X] Use local grammar checking libraries (typo-js for spelling, write-good for style)
+[X] Show inline grammar, spelling, and punctuation suggestions
+[X] Show style suggestions (clarity, active voice, etc.)
+[X] Implement dismiss functionality for suggestions
+[X] Allow users to dismiss individual suggestions to prevent them from reappearing
+[X] Track dismissed suggestions with context-aware hashing
+[X] Automatically clear dismissed suggestions when text is modified
+[X] Build AI-powered "Overview" tab
+[X] Highlight any section of text for analysis
+[X] Use AI to analyze mood and tone
+[X] Display emoji/icon for mood summary
+[X] Display top 3 moods with confidence scores
+[ ] Use AI to analyze pacing
+[ ] Show visual pacing indicator for 250-word chunks
+[ ] Use color coding: dark blue (too slow), green (good), red (too fast)
+[X] Build "Plot Analysis" tab
+[X] Implement chat interface with LLM context awareness
+[X] Use current document and character context to suggest plot ideas
+[X] Store full suggestion/chat history with timestamps
+[ ] Build "Inspiration" tab
+[ ] Analyze user text for theme, style, and tone
+[ ] Query Google Books API for 5 similar works
+[ ] Display results with title, author, genre, publication date, avg rating
+[X] Build sidebar layout
+[X] Display editor on left, feature tabs on right
+[X] Use tabs to switch between Overview, Plot, Characters, Inspiration
+[X] Phase 5: Enhanced Dashboard Features
+[X] Add search bar for document titles
+[X] Implement sort by most recently modified
+[X] Implement sort by most recently created
+[X] Add download button (.docx) to each document card
+[X] Add upload button supporting .doc, .docx, and .txt files
+[ ] Add delete button with verification dialog to each document card
+[X] Phase 6: Enhanced Editor Features
+[X] Add download button with multiple format options (.txt, .docx, .pdf)
+[X] Add keyboard shortcut support (Ctrl+S to save)
+[ ] Add copy-all button for entire document content
+[X] Phase 7: Landing Page and Branding
+[X] Create beautiful landing page with Wordwise AI branding
+[X] Implement light pastel gradient background (pink-50 via purple-50 to blue-50)
+[X] Add hero section with compelling copy and call-to-action buttons
+[X] Include features section highlighting AI-powered writing capabilities
+[X] Update login page with consistent branding and design
+[X] Update signup page with consistent branding and design
+[X] Add navigation with logo and app name
+[X] Implement responsive design for mobile and desktop
+[X] Add back-to-home navigation from auth pages
+[X] Phase 8: Theme Consistency
+[X] Update dashboard page with Wordwise AI branding and theme
+[X] Update editor page with consistent design and glassmorphism effects
+[X] Update writing sidebar with purple color scheme and backdrop blur
+[X] Implement consistent button styling with gradient backgrounds
+[X] Add glassmorphism effects throughout the application
+[X] Ensure responsive design across all pages
+[X] Phase 9: Web Page Title and Icon
+[X] Create custom SVG favicon with Wordwise AI branding
+[X] Design high-resolution icon for various use cases
+[X] Update layout metadata with comprehensive SEO information
+[X] Add OpenGraph and Twitter card metadata
+[X] Implement web app manifest for PWA support
+[X] Add theme colors and proper icon references
+[X] Include comprehensive meta tags for better SEO
+[ ] Final Deployment Tasks
+[ ] Deploy app to Firebase Hosting
+[ ] Set up production environment build
+[ ] Enable HTTPS and global CDN
+[ ] Test end-to-end flows
+[ ] Auth → document dashboard → editor → AI features
+[ ] Character rename test
+[ ] File upload and export test
+[~] Validate AI features
+[X] Grammar correction suggestions visible inline
+[X] Mood and pacing analysis output accurate
+[X] Plot suggestions use context correctly
+[ ] Similar books are relevant and correctly displayed
