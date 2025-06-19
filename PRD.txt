@@ -19,14 +19,14 @@
 [X] Update existing documents with edits
 [X] Delete documents from Firestore
 [~] Add document search & sort features
-[ ] Enable keyword search by title
+[ ] Enable keyword seach by title
 [ ] Implement sorting by creation date, modified date, word count
 [~] Implement file upload support
-[ ] Accept .txt, .doc, and .docx files
+[~] Accept .txt, .doc, and .docx files
 [ ] Parse and convert to plain text or HTML for editing
-[~] Implement character tracking backend
+[~] Implement character tracking
 [~] Detect proper nouns and capitalized names
-[ ] Store detected characters with positions and metadata
+[ ] Detect characters with positions and metadata
 [X] Phase 3: Interface Layer
 [X] Create responsive dashboard view
 [X] Display document cards or list with metadata
@@ -47,13 +47,13 @@
 [ ] Replace all occurrences of character name in document
 [X] Phase 4: Implementation Layer
 [X] Implement advanced grammar and style correction
-[X] Use local grammar checking libraries (typo-js for spelling, write-good for style)
+[~] Use local grammar checking libraries (typo-js for spelling, write-good for style)
 [X] Show inline grammar, spelling, and punctuation suggestions
-[X] Show style suggestions (clarity, active voice, etc.)
-[X] Implement dismiss functionality for suggestions
-[X] Allow users to dismiss individual suggestions to prevent them from reappearing
-[X] Track dismissed suggestions with context-aware hashing
-[X] Automatically clear dismissed suggestions when text is modified
+[~] Show style suggestions (clarity, active voice, etc.)
+[~] Implement dismiss functionality for suggestions
+[~] Allow users to dismiss individual suggestions to prevent them from reappearing
+[~] Track dismissed suggestions with context-aware hashing
+[~] Automatically clear dismissed suggestions when text is modified
 [X] Build AI-powered "Overview" tab
 [X] Highlight any section of text for analysis
 [X] Use AI to analyze mood and tone
@@ -101,14 +101,6 @@
 [X] Implement consistent button styling with gradient backgrounds
 [X] Add glassmorphism effects throughout the application
 [X] Ensure responsive design across all pages
-[X] Phase 9: Web Page Title and Icon
-[X] Create custom SVG favicon with Wordwise AI branding
-[X] Design high-resolution icon for various use cases
-[X] Update layout metadata with comprehensive SEO information
-[X] Add OpenGraph and Twitter card metadata
-[X] Implement web app manifest for PWA support
-[X] Add theme colors and proper icon references
-[X] Include comprehensive meta tags for better SEO
 [ ] Final Deployment Tasks
 [ ] Deploy app to Firebase Hosting
 [ ] Set up production environment build

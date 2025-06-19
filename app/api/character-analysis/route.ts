@@ -3,37 +3,43 @@ import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
 
 // Constants for configuration
-const MIN_TEXT_LENGTH = 100
-const MAX_TOKENS = 500
+const MIN_TEXT_LENGTH = 50
+const MAX_TOKENS = 400
 const TEMPERATURE = 0.3 // Lower temperature for more consistent analysis
 
-// System prompt for consistent literary analysis
-const LITERARY_ANALYST_SYSTEM_PROMPT = `You are a literary analyst specializing in plot analysis and story structure. Your task is to create extremely concise plot summaries that help writers understand their narrative.
+// System prompt for character analysis
+const CHARACTER_ANALYST_SYSTEM_PROMPT = `You are a literary analyst specializing in character detection and analysis. Your task is to identify and analyze characters in the provided text.
 
 Focus on:
-- Main plot points and story progression
-- Key events and turning points
+- Character names and aliases
+- Character roles and importance
+- Character relationships and interactions
+- Character development and arcs
 - Character motivations and conflicts
-- Overall narrative arc and themes
+- Physical appearance and characteristics
 
 Guidelines:
-- Format response as bullet points using • symbols
-- Keep each bullet point extremely brief (less than one sentence)
-- Use 3-5 words maximum per plot point
-- Focus on the most essential story elements only
-- If text appears incomplete, note what has happened so far
-- Provide actionable insights for the writer
-- Maintain professional, analytical tone
-- Use **bold** for key themes, character names, and important concepts
+- Return a JSON array of character objects
+- Each character should have: name, mentions (count), role, description
+- Role categories: "Main Character", "Supporting Character", "Minor Character"
+- Provide extremely brief character descriptions (maximum 3 sentences)
+- First sentence: Physical appearance and basic characteristics
+- Second sentence: Role and importance in story
+- Third sentence: Key motivation or conflict
+- Use **bold** for character names in descriptions
 - Use *italic* for emphasis and literary terms
-- Format example: "**Protagonist** discovers *hidden truth*"
-- Ensure proper markdown formatting for better readability
+- Format example: "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*."
+- Ensure proper JSON formatting for parsing
 
-Examples of good plot points:
-• **John** enters *mysterious building*
-• **Conflict** escalates between *rivals*
-• **Revelation** changes *everything*
-• **Character** makes *difficult choice*`
+Return format:
+[
+  {
+    "name": "Character Name",
+    "mentions": 5,
+    "role": "Main Character",
+    "description": "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*."
+  }
+]`
 
 // Error messages
 const ERROR_MESSAGES = {
@@ -42,8 +48,8 @@ const ERROR_MESSAGES = {
   API_KEY_MISSING: "OpenAI API key not configured. Please check your environment variables.",
   RATE_LIMIT: "Rate limit exceeded. Please try again later.",
   INVALID_API_KEY: "Invalid API key. Please check your OpenAI configuration.",
-  UNEXPECTED_ERROR: "An unexpected error occurred while generating plot summary. Please try again.",
-  API_ERROR: "Failed to generate plot summary. Please try again."
+  UNEXPECTED_ERROR: "An unexpected error occurred while analyzing characters. Please try again.",
+  API_ERROR: "Failed to analyze characters. Please try again."
 } as const
 
 // Helper function to estimate token usage
@@ -53,7 +59,7 @@ function estimateTokens(text: string): number {
 }
 
 // Helper function to optimize input text
-function optimizeInputText(text: string, maxTokens: number = 2000): string {
+function optimizeInputText(text: string, maxTokens: number = 1500): string {
   const estimatedTokens = estimateTokens(text)
   
   if (estimatedTokens > maxTokens) {
@@ -82,6 +88,40 @@ function handleOpenAIError(error: any): { status: number; message: string } {
   }
   
   return { status: 500, message: ERROR_MESSAGES.UNEXPECTED_ERROR }
+}
+
+// Helper function to parse and validate JSON response
+function parseCharacterResponse(response: string): any[] {
+  try {
+    // Clean the response to ensure it's valid JSON
+    const cleanedResponse = response.trim()
+    const jsonStart = cleanedResponse.indexOf('[')
+    const jsonEnd = cleanedResponse.lastIndexOf(']') + 1
+    
+    if (jsonStart === -1 || jsonEnd === 0) {
+      throw new Error("Invalid JSON format")
+    }
+    
+    const jsonString = cleanedResponse.substring(jsonStart, jsonEnd)
+    const characters = JSON.parse(jsonString)
+    
+    // Validate that it's an array
+    if (!Array.isArray(characters)) {
+      throw new Error("Response is not an array")
+    }
+    
+    // Validate each character object
+    return characters.filter(char => 
+      char && 
+      typeof char.name === 'string' && 
+      typeof char.mentions === 'number' &&
+      typeof char.role === 'string' &&
+      typeof char.description === 'string'
+    )
+  } catch (error) {
+    console.error("JSON parsing error:", error)
+    return []
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -117,25 +157,28 @@ export async function POST(request: NextRequest) {
     // Optimize input text to prevent token limit issues
     const optimizedText = optimizeInputText(text)
     
-    // Generate plot summary using OpenAI
-    const { text: summary } = await generateText({
+    // Generate character analysis using OpenAI
+    const { text: response } = await generateText({
       model: openai("gpt-4o-mini"),
-      system: LITERARY_ANALYST_SYSTEM_PROMPT,
-      prompt: `Please provide a bullet-point plot summary for this text: "${optimizedText}"`,
+      system: CHARACTER_ANALYST_SYSTEM_PROMPT,
+      prompt: `Please analyze the characters in this text and return a JSON array of character objects: "${optimizedText}"`,
       maxTokens: MAX_TOKENS,
       temperature: TEMPERATURE,
     })
 
     // Validate response
-    if (!summary || summary.trim().length === 0) {
+    if (!response || response.trim().length === 0) {
       return NextResponse.json(
-        { error: "Generated summary is empty. Please try again." },
+        { error: "Generated analysis is empty. Please try again." },
         { status: 500 }
       )
     }
 
+    // Parse the JSON response
+    const characters = parseCharacterResponse(response)
+
     return NextResponse.json({ 
-      summary,
+      characters,
       metadata: {
         inputLength: text.length,
         optimizedLength: optimizedText.length,
@@ -152,10 +195,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle general errors
-    console.error("Plot summary error:", error)
+    console.error("Character analysis error:", error)
     return NextResponse.json(
       { error: ERROR_MESSAGES.API_ERROR },
       { status: 500 }
     )
   }
-}
+} 
