@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { User, Users, Loader2, RefreshCw, AlertCircle, Info, Image, Download } from "lucide-react"
+import { User, Users, Loader2, RefreshCw, AlertCircle, Info, Image, Download, Dog, Cat, Sparkles, Zap, Rocket, Ghost, Crown, Sword, Shield, Heart, Star, Moon, Sun, Cloud, Trees, Flower, Bug, Fish, Bird } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 
 interface CharacterNotebookProps {
@@ -13,6 +13,7 @@ interface Character {
   mentions: number
   role: string
   description: string
+  type: string
 }
 
 interface CharacterAnalysisResponse {
@@ -60,6 +61,74 @@ function markdownToHtml(text: string): string {
 // Function to safely render HTML content
 function createMarkup(htmlContent: string) {
   return { __html: htmlContent }
+}
+
+// Function to get appropriate icon based on AI-determined character type
+function getCharacterIcon(characterType: string) {
+  switch (characterType.toLowerCase()) {
+    case 'animal':
+      return Dog
+    case 'magical':
+      return Sparkles
+    case 'robot':
+      return Zap
+    case 'alien':
+      return Rocket
+    case 'ghost':
+    case 'spirit':
+      return Ghost
+    case 'royal':
+    case 'noble':
+    case 'king':
+    case 'queen':
+    case 'prince':
+    case 'princess':
+      return Crown
+    case 'warrior':
+    case 'knight':
+    case 'soldier':
+      return Sword
+    case 'guard':
+    case 'protector':
+      return Shield
+    case 'lover':
+    case 'romantic':
+      return Heart
+    case 'hero':
+    case 'champion':
+      return Star
+    case 'wizard':
+    case 'witch':
+    case 'mage':
+      return Moon
+    case 'divine':
+    case 'angel':
+    case 'deity':
+      return Sun
+    case 'nature':
+    case 'druid':
+    case 'ranger':
+      return Trees
+    case 'fairy':
+    case 'sprite':
+      return Flower
+    case 'insect':
+    case 'spider':
+      return Bug
+    case 'aquatic':
+    case 'fish':
+    case 'mermaid':
+      return Fish
+    case 'avian':
+    case 'bird':
+    case 'eagle':
+      return Bird
+    case 'other':
+      return Cloud
+    case 'human':
+    default:
+      return User
+  }
 }
 
 export function CharacterNotebook({ content }: CharacterNotebookProps) {
@@ -359,21 +428,22 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
         <div className="space-y-3 max-h-96 overflow-y-auto border-2 border-gray-300 rounded-lg bg-gray-50 p-3 shadow-inner">
           {characters.map((character, index) => (
             <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="h-4 w-4 text-blue-600" />
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    {(() => {
+                      const IconComponent = getCharacterIcon(character.type)
+                      return <IconComponent className="h-4 w-4 text-blue-600" />
+                    })()}
                   </div>
-                  <h4 className="font-medium text-gray-900">{character.name}</h4>
+                  <div className="flex flex-col justify-center min-w-0">
+                    <h4 className="font-semibold text-lg text-gray-900 break-words leading-tight">{character.name}</h4>
+                    <span className={`mt-0.5 text-xs px-2 py-1 rounded font-medium block w-fit ${getRoleColor(character.role)}`}>{character.role}</span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className={`text-xs px-2 py-1 rounded font-medium ${getRoleColor(character.role)}`}>
-                    {character.role}
-                  </span>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                    {character.mentions} mentions
-                  </span>
-                </div>
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded self-start ml-2">
+                  {character.mentions} mentions
+                </span>
               </div>
 
               <div className="text-xs text-gray-700 leading-relaxed prose prose-sm max-w-none mb-3">

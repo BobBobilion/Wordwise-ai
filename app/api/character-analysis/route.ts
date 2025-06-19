@@ -17,11 +17,13 @@ Focus on:
 - Character development and arcs
 - Character motivations and conflicts
 - Physical appearance and characteristics
+- Character type/classification
 
 Guidelines:
 - Return a JSON array of character objects
-- Each character should have: name, mentions (count), role, description
+- Each character should have: name, mentions (count), role, description, type
 - Role categories: "Main Character", "Supporting Character", "Minor Character"
+- Type categories: "Human", "Animal", "Magical", "Robot", "Alien", "Ghost", "Royal", "Warrior", "Guard", "Lover", "Hero", "Wizard", "Divine", "Nature", "Fairy", "Insect", "Aquatic", "Avian", "Other"
 - Provide extremely brief character descriptions (maximum 3 sentences)
 - First sentence: Physical appearance and basic characteristics
 - Second sentence: Role and importance in story
@@ -37,7 +39,8 @@ Return format:
     "name": "Character Name",
     "mentions": 5,
     "role": "Main Character",
-    "description": "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*."
+    "description": "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*.",
+    "type": "Human"
   }
 ]`
 
@@ -116,7 +119,8 @@ function parseCharacterResponse(response: string): any[] {
       typeof char.name === 'string' && 
       typeof char.mentions === 'number' &&
       typeof char.role === 'string' &&
-      typeof char.description === 'string'
+      typeof char.description === 'string' &&
+      typeof char.type === 'string'
     )
   } catch (error) {
     console.error("JSON parsing error:", error)
