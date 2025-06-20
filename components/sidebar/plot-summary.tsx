@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { BookOpen, Loader2, RefreshCw, AlertCircle, Info } from "lucide-react"
+import { BookOpen, Loader2, RefreshCw, AlertCircle, Info, Lightbulb, Eye } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { TensionChart } from "./tension-chart"
 
@@ -26,6 +26,18 @@ interface PlotSummaryResponse {
 }
 
 interface PlotSummaryError {
+  error: string
+}
+
+interface PlotSuggestionsResponse {
+  suggestions: string[]
+  metadata?: {
+    inputPlotPoints: number
+    model: string
+  }
+}
+
+interface PlotSuggestionsError {
   error: string
 }
 
@@ -62,6 +74,13 @@ export function PlotSummary({ content }: PlotSummaryProps) {
   const [error, setError] = useState<string>("")
   const [metadata, setMetadata] = useState<PlotSummaryResponse['metadata'] | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null)
+  
+  // Plot suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [suggestionsError, setSuggestionsError] = useState<string>("")
+  const [suggestionsMetadata, setSuggestionsMetadata] = useState<PlotSuggestionsResponse['metadata'] | null>(null)
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set())
 
   // Constants
   const MIN_TEXT_LENGTH = 100
@@ -74,6 +93,8 @@ export function PlotSummary({ content }: PlotSummaryProps) {
       setError("")
       setMetadata(null)
       setSelectedPoint(null)
+      setSuggestions([])
+      setSelectedSuggestions(new Set())
       return
     }
 
@@ -116,8 +137,58 @@ export function PlotSummary({ content }: PlotSummaryProps) {
       setActionableInsights([])
       setMetadata(null)
       setSelectedPoint(null)
+      setSuggestions([])
+      setSelectedSuggestions(new Set())
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Generate plot suggestions
+  const generateSuggestions = async () => {
+    if (summary.length < 2) {
+      setSuggestionsError("Need at least 2 plot points to generate suggestions")
+      return
+    }
+
+    setSuggestionsLoading(true)
+    setSuggestionsError("")
+    setSuggestionsMetadata(null)
+    setSelectedSuggestions(new Set())
+    
+    try {
+      const response = await fetch("/api/plot-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plotPoints: summary }),
+      })
+
+      const data: PlotSuggestionsResponse | PlotSuggestionsError = await response.json()
+
+      if (!response.ok) {
+        const errorData = data as PlotSuggestionsError
+        throw new Error(errorData.error || "Failed to generate suggestions")
+      }
+
+      const successData = data as PlotSuggestionsResponse
+      
+      if (!successData.suggestions || successData.suggestions.length === 0) {
+        throw new Error("Generated suggestions are empty. Please try again.")
+      }
+
+      setSuggestions(successData.suggestions)
+      setSuggestionsMetadata(successData.metadata || null)
+    } catch (error) {
+      console.error("Plot suggestions error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unable to generate plot suggestions. Please try again."
+      setSuggestionsError(errorMessage)
+      setSuggestions([])
+      setSuggestionsMetadata(null)
+      setSelectedSuggestions(new Set())
+    } finally {
+      setSuggestionsLoading(false)
     }
   }
 
@@ -129,6 +200,19 @@ export function PlotSummary({ content }: PlotSummaryProps) {
   // Handle point selection from tension chart
   const handlePointClick = (index: number) => {
     setSelectedPoint(selectedPoint === index ? null : index)
+  }
+
+  // Handle suggestion toggle
+  const handleSuggestionToggle = (index: number) => {
+    setSelectedSuggestions(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
   }
 
   return (
@@ -224,6 +308,92 @@ export function PlotSummary({ content }: PlotSummaryProps) {
                 </div>
               </div>
             )}
+
+            {/* Plot Suggestions Section */}
+            <div className="border-t border-gray-200 pt-4 space-y-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Lightbulb className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-medium text-gray-900">Plot Continuation Ideas</span>
+                </div>
+                <button
+                  onClick={generateSuggestions}
+                  disabled={suggestionsLoading}
+                  className="inline-flex items-center px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 transition-colors"
+                >
+                  {suggestionsLoading ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Generating...
+                    </>
+                  ) : suggestions.length > 0 ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Regenerate
+                    </>
+                  ) : (
+                    <>
+                      <Lightbulb className="h-3 w-3 mr-1" />
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {suggestionsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                  <span className="ml-2 text-xs text-gray-600">Generating plot suggestions...</span>
+                </div>
+              ) : suggestionsError ? (
+                <div className="flex items-center justify-center py-4">
+                  <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                  <div className="text-xs text-red-600 text-center">
+                    <p className="font-medium">Failed to generate suggestions</p>
+                    <p className="text-xs mt-1">{suggestionsError}</p>
+                  </div>
+                </div>
+              ) : suggestions.length > 0 ? (
+                <div className="space-y-2">
+                  {suggestions.map((suggestion, index) => {
+                    const isSelected = selectedSuggestions.has(index)
+                    return (
+                      <div key={index} className="relative group">
+                        <div 
+                          className={`flex items-start space-x-2 p-2 rounded bg-white border transition-all duration-300 cursor-pointer ${
+                            isSelected 
+                              ? 'border-2 border-purple-400 shadow-sm bg-purple-50' 
+                              : 'border-2 border-gray-200 hover:border-purple-400'
+                          }`}
+                          onClick={() => handleSuggestionToggle(index)}
+                        >
+                          <span className="text-purple-600 font-bold mt-0.5 min-w-[20px]">{index + 1}.</span>
+                          <div 
+                            className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={createMarkup(markdownToHtml(suggestion))}
+                          />
+                        </div>
+                        
+                        {/* Blur overlay - only show if not selected */}
+                        {!isSelected && (
+                          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded border border-gray-200 flex items-center justify-center transition-opacity duration-300 group-hover:opacity-0 cursor-pointer pointer-events-none">
+                            <div className="flex items-center space-x-2 text-gray-500">
+                              <Eye className="h-4 w-4" />
+                              <span className="text-sm font-medium">Click to reveal</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <Lightbulb className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-xs text-gray-600">Click "Generate" to get plot continuation ideas.</p>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="text-center py-8">
