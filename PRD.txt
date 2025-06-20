@@ -73,6 +73,15 @@
 [X] Implement chat interface with LLM context awareness
 [X] Use current document and character context to suggest plot ideas
 [X] Store full suggestion/chat history with timestamps
+[X] Implement tension-based plot visualization
+[X] Create interactive line chart showing plot tension over time
+[X] Use AI to assign tension scores (0-100) to each plot point
+[X] Display numbered plot points with clickable nodes on chart
+[X] Add hover effects showing plot point text
+[X] Implement click-to-highlight functionality between chart and plot summary
+[X] Replace bullet points with numbered plot summary list
+[X] Add visual highlighting for selected plot points
+[X] Use Recharts library for smooth, responsive chart rendering
 [ ] Build "Inspiration" tab
 [ ] Analyze user text for theme, style, and tone
 [ ] Query Google Books API for 5 similar works

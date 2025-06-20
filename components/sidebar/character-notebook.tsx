@@ -165,6 +165,28 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
   // Constants
   const MIN_TEXT_LENGTH = 50
 
+  // Function to sort characters by importance and mention count
+  const sortCharacters = (characters: Character[]): Character[] => {
+    const rolePriority: Record<string, number> = {
+      "Main Character": 3,
+      "Supporting Character": 2,
+      "Minor Character": 1,
+    }
+
+    return [...characters].sort((a, b) => {
+      // First sort by role importance
+      const aPriority = rolePriority[a.role] || 0
+      const bPriority = rolePriority[b.role] || 0
+      
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority // Higher priority first
+      }
+      
+      // Then sort by mention count (descending)
+      return b.mentions - a.mentions
+    })
+  }
+
   const analyzeCharacters = async () => {
     const text = content.replace(/<[^>]*>/g, "").trim()
 
@@ -202,7 +224,7 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
         throw new Error("Invalid character analysis response. Please try again.")
       }
 
-      setCharacters(successData.characters)
+      setCharacters(sortCharacters(successData.characters))
       setMetadata(successData.metadata || null)
     } catch (error) {
       console.error("Character analysis error:", error)
@@ -479,56 +501,61 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
       await onCharacterNameChange(nameChangePreview.oldName, nameChangePreview.newName)
       
       // Update local character list and their descriptions
-      setCharacters(prev => prev.map(char => {
-        if (char.name === nameChangePreview.oldName) {
-          // Update the character name
-          const updatedChar = { ...char, name: nameChangePreview.newName }
-          
-          // Also update the description if it contains the old name
-          if (char.description) {
-            const oldVariations = generateNameVariations(nameChangePreview.oldName)
-            const newVariations = generateNameVariations(nameChangePreview.newName)
-            let updatedDescription = char.description
+      setCharacters(prev => {
+        const updatedCharacters = prev.map(char => {
+          if (char.name === nameChangePreview.oldName) {
+            // Update the character name
+            const updatedChar = { ...char, name: nameChangePreview.newName }
             
-            // Create a map of old variation types to new names
-            const replacementMap = new Map<string, string>()
-            
-            // Map each type to the appropriate new name
-            oldVariations.forEach(oldVar => {
-              if (oldVar.type === 'full') {
-                replacementMap.set(oldVar.text, nameChangePreview.newName)
-              } else if (oldVar.type === 'first') {
-                // Find the new first name
-                const newFirstName = newVariations.find(v => v.type === 'first')
-                replacementMap.set(oldVar.text, newFirstName?.text || nameChangePreview.newName)
-              } else if (oldVar.type === 'last') {
-                // Find the new last name
-                const newLastName = newVariations.find(v => v.type === 'last')
-                replacementMap.set(oldVar.text, newLastName?.text || nameChangePreview.newName)
-              }
-            })
-            
-            // Perform replacements in the description
-            replacementMap.forEach((newText, oldText) => {
-              // Handle both regular text and bold text (**name**)
-              const regex = new RegExp(`\\*\\*${escapeRegExp(oldText)}\\*\\*|\\b${escapeRegExp(oldText)}\\b`, 'gi')
-              updatedDescription = updatedDescription.replace(regex, (match) => {
-                // If it's bold text (**name**), keep the bold formatting
-                if (match.startsWith('**') && match.endsWith('**')) {
-                  return `**${newText}**`
+            // Also update the description if it contains the old name
+            if (char.description) {
+              const oldVariations = generateNameVariations(nameChangePreview.oldName)
+              const newVariations = generateNameVariations(nameChangePreview.newName)
+              let updatedDescription = char.description
+              
+              // Create a map of old variation types to new names
+              const replacementMap = new Map<string, string>()
+              
+              // Map each type to the appropriate new name
+              oldVariations.forEach(oldVar => {
+                if (oldVar.type === 'full') {
+                  replacementMap.set(oldVar.text, nameChangePreview.newName)
+                } else if (oldVar.type === 'first') {
+                  // Find the new first name
+                  const newFirstName = newVariations.find(v => v.type === 'first')
+                  replacementMap.set(oldVar.text, newFirstName?.text || nameChangePreview.newName)
+                } else if (oldVar.type === 'last') {
+                  // Find the new last name
+                  const newLastName = newVariations.find(v => v.type === 'last')
+                  replacementMap.set(oldVar.text, newLastName?.text || nameChangePreview.newName)
                 }
-                // Otherwise, just replace the text
-                return newText
               })
-            })
+              
+              // Perform replacements in the description
+              replacementMap.forEach((newText, oldText) => {
+                // Handle both regular text and bold text (**name**)
+                const regex = new RegExp(`\\*\\*${escapeRegExp(oldText)}\\*\\*|\\b${escapeRegExp(oldText)}\\b`, 'gi')
+                updatedDescription = updatedDescription.replace(regex, (match) => {
+                  // If it's bold text (**name**), keep the bold formatting
+                  if (match.startsWith('**') && match.endsWith('**')) {
+                    return `**${newText}**`
+                  }
+                  // Otherwise, just replace the text
+                  return newText
+                })
+              })
+              
+              updatedChar.description = updatedDescription
+            }
             
-            updatedChar.description = updatedDescription
+            return updatedChar
           }
-          
-          return updatedChar
-        }
-        return char
-      }))
+          return char
+        })
+        
+        // Sort the updated characters to maintain proper order
+        return sortCharacters(updatedCharacters)
+      })
       
       // Update character images mapping
       if (characterImages[nameChangePreview.oldName]) {
@@ -597,6 +624,9 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
     return colors[role] || colors["Minor Character"]
   }
 
+  // Sort characters for display
+  const sortedCharacters = sortCharacters(characters)
+
   return (
     <div className="p-4 space-y-4">
       <div className="text-center">
@@ -622,7 +652,7 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
         </div>
         <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mt-2">
           <Users className="h-4 w-4" />
-          <span>{characters.length} characters detected</span>
+          <span>{sortedCharacters.length} characters detected</span>
         </div>
       </div>
 
@@ -639,7 +669,7 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
             <p className="text-xs mt-1">{error}</p>
           </div>
         </div>
-      ) : characters.length === 0 ? (
+      ) : sortedCharacters.length === 0 ? (
         <div className="text-center py-8">
           <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600">No characters detected yet.</p>
@@ -647,7 +677,7 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
         </div>
       ) : (
         <div className="space-y-3 max-h-96 overflow-y-auto border-2 border-gray-300 rounded-lg bg-gray-50 p-3 shadow-inner">
-          {characters.map((character, index) => (
+          {sortedCharacters.map((character, index) => (
             <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center space-x-2 min-w-0 flex-1">
@@ -842,7 +872,7 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
         </div>
       )}
 
-      {characters.length > 0 && !loading && !error && (
+      {sortedCharacters.length > 0 && !loading && !error && (
         <div className="text-xs text-gray-500 text-center">
           Character analysis by AI • Manual refresh only
         </div>

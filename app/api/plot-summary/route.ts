@@ -4,7 +4,7 @@ import { openai } from "@ai-sdk/openai"
 
 // Constants for configuration
 const MIN_TEXT_LENGTH = 100
-const MAX_TOKENS = 2000 // Significantly increased for comprehensive JSON response
+const MAX_TOKENS = 5000 // Significantly increased for comprehensive JSON response
 const TEMPERATURE = 0.3 // Lower temperature for more consistent analysis
 
 // System prompt for consistent literary analysis with JSON structure
@@ -13,9 +13,18 @@ const LITERARY_ANALYST_SYSTEM_PROMPT = `You are a literary analyst specializing 
 CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format - no additional text, no markdown formatting, just pure JSON:
 {
   "plotSummary": [
-    "bullet point 1",
-    "bullet point 2",
-    "bullet point 3"
+    {
+      "point": "bullet point 1",
+      "tension": 25
+    },
+    {
+      "point": "bullet point 2", 
+      "tension": 45
+    },
+    {
+      "point": "bullet point 3",
+      "tension": 85
+    }
   ],
   "actionableInsights": [
     "insight 1",
@@ -38,6 +47,16 @@ Plot Summary Guidelines:
 - Provide high-level overview, not extreme details
 - Format example: "**John** discovers a *hidden truth* that changes his entire perspective on the conflict."
 
+Tension Score Guidelines:
+- Assign a tension score (0-100) to each plot point
+- 0 = No tension (calm, exposition, resolution)
+- 25 = Low tension (character development, setup)
+- 50 = Medium tension (conflicts begin, complications)
+- 75 = High tension (climax approaches, major conflicts)
+- 100 = Maximum tension (climax, peak conflict)
+- Consider the emotional intensity and narrative stakes of each point
+- Tension should generally build throughout the story with peaks at key moments
+
 Actionable Insights Guidelines:
 - Provide specific writing advice and suggestions
 - Focus on story structure improvements
@@ -49,11 +68,11 @@ Actionable Insights Guidelines:
 - Use **bold** for key recommendations
 - Use *italic* for literary concepts
 
-Examples of good plot points:
-• **John** discovers a *hidden truth* that changes his entire perspective on the conflict.
-• **Conflict** escalates between *rivals* as they compete for the same goal.
-• **Revelation** about the past changes *everything* for the protagonist.
-• **Character** makes a *difficult choice* that affects the entire story.
+Examples of good plot points with tension scores:
+• {"point": "**John** discovers a *hidden truth* that changes his entire perspective on the conflict.", "tension": 65}
+• {"point": "**Conflict** escalates between *rivals* as they compete for the same goal.", "tension": 80}
+• {"point": "**Revelation** about the past changes *everything* for the protagonist.", "tension": 90}
+• {"point": "**Character** makes a *difficult choice* that affects the entire story.", "tension": 75}
 
 Examples of good insights:
 • **Consider** adding *backstory* for **protagonist**
@@ -206,7 +225,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse JSON response
-    let parsedResponse: { plotSummary: string[], actionableInsights: string[] }
+    let parsedResponse: { plotSummary: { point: string; tension: number }[]; actionableInsights: string[] }
     try {
       // Clean the response text to ensure it's valid JSON
       const cleanedText = responseText.trim()
@@ -228,6 +247,16 @@ export async function POST(request: NextRequest) {
       // Validate array contents
       if (parsedResponse.plotSummary.length === 0 && parsedResponse.actionableInsights.length === 0) {
         throw new Error("Response contains empty arrays")
+      }
+
+      // Validate plotSummary structure
+      for (const item of parsedResponse.plotSummary) {
+        if (!item.point || typeof item.point !== 'string') {
+          throw new Error("Invalid plotSummary item - missing or invalid point")
+        }
+        if (typeof item.tension !== 'number' || item.tension < 0 || item.tension > 100) {
+          throw new Error("Invalid plotSummary item - tension must be a number between 0 and 100")
+        }
       }
 
     } catch (parseError) {

@@ -4,7 +4,7 @@ import { openai } from "@ai-sdk/openai"
 
 // Constants for configuration
 const MIN_TEXT_LENGTH = 50
-const MAX_TOKENS = 1500 // Significantly increased for comprehensive character analysis
+const MAX_TOKENS = 5000 // Significantly increased for comprehensive character analysis
 const TEMPERATURE = 0.3 // Lower temperature for more consistent analysis
 
 // System prompt for character analysis
