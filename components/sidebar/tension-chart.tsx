@@ -109,6 +109,8 @@ const CustomDot = ({ cx, cy, payload, index, onClick, selectedPoint }: any) => {
 }
 
 export function TensionChart({ plotSummary, onPointClick, selectedPoint }: TensionChartProps) {
+  const [isHovering, setIsHovering] = useState(false)
+  
   // Transform data for the chart
   const chartData: ChartDataPoint[] = plotSummary.map((item, index) => ({
     index: index + 1,
@@ -117,10 +119,14 @@ export function TensionChart({ plotSummary, onPointClick, selectedPoint }: Tensi
   }))
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div 
+      className="bg-white rounded-lg border border-gray-200 p-4"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
       <div className="mb-3">
         <h4 className="text-sm font-medium text-gray-900">Plot Tension Over Time</h4>
-        <p className="text-xs text-gray-500">Click on points to highlight corresponding plot elements</p>
+        <p className="text-xs text-gray-500">Hover to see plot points • Click to highlight corresponding elements</p>
       </div>
       
       <div className="h-48">
@@ -148,13 +154,13 @@ export function TensionChart({ plotSummary, onPointClick, selectedPoint }: Tensi
               dataKey="tension"
               stroke="#3b82f6"
               strokeWidth={2}
-              dot={(props) => (
+              dot={isHovering ? (props) => (
                 <CustomDot 
                   {...props} 
                   onClick={onPointClick}
                   selectedPoint={selectedPoint}
                 />
-              )}
+              ) : false}
               activeDot={false}
             />
           </LineChart>
