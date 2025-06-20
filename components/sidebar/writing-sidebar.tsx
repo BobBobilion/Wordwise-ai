@@ -9,14 +9,19 @@ import type { GrammarSuggestion } from "@/lib/types"
 
 interface WritingSidebarProps {
   content: string
-  suggestions: GrammarSuggestion[]
-  onApplySuggestion: (suggestion: GrammarSuggestion) => void
-  onDismissSuggestion: (suggestion: GrammarSuggestion) => void
+  suggestions?: GrammarSuggestion[]
+  onApplySuggestion?: (suggestion: GrammarSuggestion) => void
+  onDismissSuggestion?: (suggestion: GrammarSuggestion) => void
 }
 
 type TabType = "overview" | "suggestions" | "characters" | "plot"
 
-export function WritingSidebar({ content, suggestions, onApplySuggestion, onDismissSuggestion }: WritingSidebarProps) {
+export function WritingSidebar({ 
+  content, 
+  suggestions = [], 
+  onApplySuggestion = () => {}, 
+  onDismissSuggestion = () => {} 
+}: WritingSidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview")
   
   // Keep references to persist component state across tab switches
@@ -46,6 +51,11 @@ export function WritingSidebar({ content, suggestions, onApplySuggestion, onDism
               }`}
             >
               {tab.label}
+              {tab.id === "suggestions" && suggestions.length > 0 && (
+                <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                  {suggestions.length}
+                </span>
+              )}
             </button>
           ))}
         </nav>

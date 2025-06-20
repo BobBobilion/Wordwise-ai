@@ -18,6 +18,13 @@ export interface GrammarSuggestion {
   suggestion: string
   start: number
   end: number
-  type?: "spelling" | "grammar" | "style"
+  type: "grammar" | "style"
   description?: string
+}
+
+export interface HighlightMark {
+  from: number
+  to: number
+  color: 'red' | 'yellow' | 'purple'
+  id: string
 }

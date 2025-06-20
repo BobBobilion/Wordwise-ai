@@ -1,510 +1,553 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react"
-import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, CheckCircle } from "lucide-react"
-import { checkSpelling, checkStyleAndGrammar, dismissSuggestion as dismissGrammarSuggestion } from "@/lib/grammar-checker"
-import type { GrammarSuggestion } from "@/lib/types"
-import { toast } from "react-toastify"
+import React, { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback } from 'react'
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import TextAlign from '@tiptap/extension-text-align'
+import FontFamily from '@tiptap/extension-font-family'
+import TextStyle from '@tiptap/extension-text-style'
+import Underline from '@tiptap/extension-underline'
+import History from '@tiptap/extension-history'
+import { Button } from '@/components/ui/button'
+import { 
+  Bold, 
+  Italic, 
+  Underline as UnderlineIcon, 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight, 
+  AlignJustify,
+  Type,
+  Undo,
+  Redo
+} from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+// Custom extensions
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
+
+interface HighlightMark {
+  from: number
+  to: number
+  color: 'red' | 'yellow' | 'purple'
+  id: string
+}
 
 interface RichTextEditorProps {
   content: string
   onChange: (content: string) => void
-  onTitleChange: (title: string) => void
   title: string
-  onSuggestionsChange?: (suggestions: GrammarSuggestion[]) => void
+  onTitleChange: (title: string) => void
+  highlights?: HighlightMark[]
+  onHighlightClick?: (highlight: HighlightMark) => void
 }
 
 export interface RichTextEditorRef {
-  applySuggestion: (suggestion: GrammarSuggestion) => void
+  addHighlight: (from: number, to: number, color: 'red' | 'yellow' | 'purple', id: string) => void
+  removeHighlight: (id: string) => void
+  clearHighlights: () => void
+  getContent: () => string
+  setContent: (content: string) => void
+  focus: () => void
+  getCursorPosition: () => number
+  setCursorPosition: (position: number) => void
 }
 
-// Generate highlighted HTML from raw text and suggestions (moved outside component to prevent recreation)
-const generateHighlightedHTML = (text: string, currentSuggestions: GrammarSuggestion[]) => {
-  if (!text) {
-    return ""
-  }
-  
-  if (currentSuggestions.length === 0) {
-    return text
-  }
+// Custom Highlight Extension
+const HighlightExtension = Extension.create({
+  name: 'highlight',
 
-  let highlightedHTML = ''
-  let currentPos = 0
-  
-  // Sort suggestions by start position
-  const sortedSuggestions = [...currentSuggestions].sort((a, b) => a.start - b.start)
-  
-  for (const suggestion of sortedSuggestions) {
-    // Add text before this suggestion
-    if (suggestion.start > currentPos) {
-      highlightedHTML += text.substring(currentPos, suggestion.start)
+  addOptions() {
+    return {
+      HTMLAttributes: {},
     }
-    
-    // Add highlighted suggestion
-    const suggestionText = text.substring(suggestion.start, suggestion.end)
-    const color = suggestion.type === 'spelling' ? '#ef4444' : '#f59e0b'
-    highlightedHTML += `<span style="text-decoration: underline; text-decoration-color: ${color}; text-decoration-thickness: 2px; text-underline-offset: 2px;">${suggestionText}</span>`
-    
-    currentPos = suggestion.end
-  }
-  
-  // Add remaining text
-  if (currentPos < text.length) {
-    highlightedHTML += text.substring(currentPos)
-  }
-  
-  return highlightedHTML
-}
+  },
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['textStyle'],
+        attributes: {
+          highlight: {
+            default: null,
+            parseHTML: element => element.getAttribute('data-highlight'),
+            renderHTML: attributes => {
+              if (!attributes.highlight) {
+                return {}
+              }
+              return {
+                'data-highlight': attributes.highlight,
+                class: `highlight-${attributes.highlight}`,
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('highlight'),
+        state: {
+          init() {
+            return DecorationSet.empty
+          },
+          apply(tr, oldState) {
+            const highlights = tr.getMeta('highlights') as HighlightMark[] || []
+            
+            if (highlights.length === 0) {
+              return oldState
+            }
+
+            const decorations = highlights.map(highlight => 
+              Decoration.inline(highlight.from, highlight.to, {
+                class: `highlight-${highlight.color}`,
+                'data-highlight-id': highlight.id,
+              })
+            )
+
+            return DecorationSet.create(tr.doc, decorations)
+          },
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state)
+          },
+        },
+      }),
+    ]
+  },
+})
+
+// Font families
+const FONT_FAMILIES = [
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Times New Roman', value: 'Times New Roman, serif' },
+  { label: 'Courier New', value: 'Courier New, monospace' },
+]
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ content, onChange, onTitleChange, title, onSuggestionsChange }, ref) => {
+  ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick }, ref) => {
+    const [currentHighlights, setCurrentHighlights] = useState<HighlightMark[]>(highlights)
+    const [cursorPosition, setCursorPosition] = useState<number>(0)
     const editorRef = useRef<HTMLDivElement>(null)
-    const [selectedFont, setSelectedFont] = useState("sans-serif")
-    const [suggestions, setSuggestions] = useState<GrammarSuggestion[]>([])
-    const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
-    const [lastKeyPressed, setLastKeyPressed] = useState<string>("")
-    const [isGrammarCheckInProgress, setIsGrammarCheckInProgress] = useState(false)
-    const [rawText, setRawText] = useState("") // Store clean text without HTML markup
-    const [cursorPosition, setCursorPosition] = useState(0) // Track cursor position as character offset
 
-    // Initialize rawText from content
-    useEffect(() => {
-      if (content) {
-        // Extract clean text from HTML content
-        const tempDiv = document.createElement('div')
-        tempDiv.innerHTML = content
-        const cleanText = tempDiv.innerText || tempDiv.textContent || ""
-        setRawText(cleanText)
-      }
-    }, [content])
-
-    // Function to get cursor position as character offset
-    const getCaretCharacterOffsetWithin = (element: HTMLElement): number => {
-      const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0) return 0
-
-      const range = selection.getRangeAt(0)
-      const preCaretRange = range.cloneRange()
-      preCaretRange.selectNodeContents(element)
-      preCaretRange.setEnd(range.endContainer, range.endOffset)
-      return preCaretRange.toString().length
-    }
-
-    // Function to set cursor position from character offset
-    const setCaretPosition = (element: HTMLElement, offset: number) => {
-      const selection = window.getSelection()
-      const range = document.createRange()
-
-      let currentNode: Node | null = null
-      let currentOffset = 0
-
-      function traverse(node: Node): boolean {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const textLength = (node.textContent || "").length
-          if (currentOffset + textLength >= offset) {
-            currentNode = node
-            offset -= currentOffset
-            return true
-          }
-          currentOffset += textLength
-        } else {
-          for (let i = 0; i < node.childNodes.length; i++) {
-            if (traverse(node.childNodes[i])) return true
-          }
-        }
-        return false
-      }
-
-      traverse(element)
-
-      if (currentNode && selection) {
-        range.setStart(currentNode, Math.min(offset, (currentNode.textContent || "").length))
-        range.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-    }
-
-    // Update editor display when rawText or suggestions change
-    useEffect(() => {
-      if (editorRef.current) {
-        const highlightedHTML = generateHighlightedHTML(rawText, suggestions)
-        if (editorRef.current.innerHTML !== highlightedHTML) {
-          // Save current cursor position
-          const wasFocused = document.activeElement === editorRef.current
-          const currentCursorPos = wasFocused ? getCaretCharacterOffsetWithin(editorRef.current) : cursorPosition
-          
-          editorRef.current.innerHTML = highlightedHTML
-          
-          // Restore cursor position if editor was focused
-          if (wasFocused && editorRef.current) {
-            editorRef.current.focus()
-            setCaretPosition(editorRef.current, currentCursorPos)
-          }
-        }
-      }
-    }, [rawText, suggestions, cursorPosition])
-
-    // Spell checker: runs on spacebar press and every 10 seconds
-    useEffect(() => {
-      if (typeof window === 'undefined') return
-
-      const intervalId = setInterval(() => {
-        if (rawText.trim().length > 20 && !isGrammarCheckInProgress) {
-          try {
-            setIsGrammarCheckInProgress(true)
-            handleSpellCheck(false, false)
-          } catch (error) {
-            console.error('Spell check interval error:', error)
-          } finally {
-            setIsGrammarCheckInProgress(false)
-          }
-        }
-      }, 10000)
-
-      return () => clearInterval(intervalId)
-    }, [rawText, isGrammarCheckInProgress])
-
-    const handleInput = useCallback(() => {
-      if (editorRef.current) {
-        // Extract clean text from the editor
-        const newRawText = editorRef.current.innerText || editorRef.current.textContent || ""
-        setRawText(newRawText)
-        onChange(newRawText) // Pass clean text to parent
+    const editor = useEditor({
+      extensions: [
+        StarterKit.configure({
+          history: false, // We'll use our custom history
+        }),
+        TextAlign.configure({
+          types: ['heading', 'paragraph'],
+        }),
+        FontFamily.configure({
+          types: ['textStyle'],
+        }),
+        TextStyle,
+        Underline,
+        History.configure({
+          depth: 100,
+        }),
+        HighlightExtension,
+      ],
+      content,
+      editorProps: {
+        attributes: {
+          class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[400px] p-4',
+        },
+      },
+      onUpdate: ({ editor }) => {
+        const html = editor.getHTML()
+        onChange(html)
         
-        // Update cursor position
-        const newCursorPos = getCaretCharacterOffsetWithin(editorRef.current)
-        setCursorPosition(newCursorPos)
-      }
-    }, [onChange])
-
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-      // Track spacebar press for spell checking
-      if (e.key === " " && typeof window !== 'undefined') {
-        setLastKeyPressed(" ")
-        // Trigger spell check on spacebar
-        if (rawText.trim().length > 5) {
-          handleSpellCheck(false, false)
-        }
-      }
-    }, [rawText])
-
-    const execCommand = (command: string, value?: string) => {
-      document.execCommand(command, false, value)
-      editorRef.current?.focus()
-    }
-
-    const handleFontChange = (font: string) => {
-      setSelectedFont(font)
-      if (editorRef.current) {
-        editorRef.current.style.fontFamily = font
-      }
-    }
-
-    const handleSpellCheck = async (showNotification = true, forceCheck = false) => {
-      if (!rawText.trim()) return
-      if (isGrammarCheckInProgress) return
-
-      if (showNotification) setIsCheckingGrammar(true)
-
-      try {
-        setIsGrammarCheckInProgress(true)
-        const spellSuggestions = await checkSpelling(rawText, forceCheck)
+        // Store cursor position
+        const { from } = editor.state.selection
+        setCursorPosition(from)
         
-        // Merge with existing suggestions, keeping style/grammar suggestions
-        setSuggestions(prev => {
-          const existingStyleGrammar = prev.filter(s => s.type === 'style' || s.type === 'grammar')
-          const newSuggestions = [...existingStyleGrammar, ...spellSuggestions].sort((a, b) => a.start - b.start)
-          return newSuggestions
+        // Clear highlights that overlap with edited text
+        const newHighlights = currentHighlights.filter(highlight => {
+          const hasOverlap = editor.state.doc.textBetween(
+            Math.max(0, highlight.from - 1),
+            Math.min(editor.state.doc.content.size, highlight.to + 1)
+          ).length > 0
+          return hasOverlap
         })
-      } catch (error) {
-        console.error("Spell check failed:", error)
-      } finally {
-        if (showNotification) setIsCheckingGrammar(false)
-        setIsGrammarCheckInProgress(false)
-      }
-    }
-
-    const handleStyleAndGrammarCheck = async (showNotification = true) => {
-      if (!rawText.trim()) return
-      if (isGrammarCheckInProgress) return
-
-      if (showNotification) setIsCheckingGrammar(true)
-
-      try {
-        setIsGrammarCheckInProgress(true)
-        // Temporarily disabled write-good to prevent freezing
-        const styleGrammarSuggestions: GrammarSuggestion[] = []
         
-        // Merge with existing suggestions, keeping spelling suggestions
-        setSuggestions(prev => {
-          const existingSpelling = prev.filter(s => s.type === 'spelling')
-          const newSuggestions = [...existingSpelling, ...styleGrammarSuggestions].sort((a, b) => a.start - b.start)
-          return newSuggestions
-        })
-
-        if (showNotification) {
-          if (styleGrammarSuggestions.length === 0) {
-            console.log("No style or grammar issues found!")
-          }
+        if (newHighlights.length !== currentHighlights.length) {
+          setCurrentHighlights(newHighlights)
         }
-      } catch (error) {
-        console.error("Style and grammar check failed:", error)
-      } finally {
-        if (showNotification) setIsCheckingGrammar(false)
-        setIsGrammarCheckInProgress(false)
-      }
-    }
+      },
+      onSelectionUpdate: ({ editor }) => {
+        const { from } = editor.state.selection
+        setCursorPosition(from)
+      },
+    })
 
-    const handleGrammarCheck = async (showNotification = true) => {
-      // Combined check for manual trigger
-      await Promise.all([
-        handleSpellCheck(showNotification, true), // Force check for manual trigger
-        handleStyleAndGrammarCheck(showNotification)
-      ])
-    }
-
-    // Helper function to adjust suggestion positions after text changes
-    const adjustSuggestionPositions = (appliedSuggestion: GrammarSuggestion, appliedText: string, newText: string) => {
-      const lengthDifference = appliedText.length - newText.length
-      
-      return (suggestion: GrammarSuggestion) => {
-        // If this suggestion comes after the applied one, adjust its position
-        if (suggestion.start >= appliedSuggestion.end) {
-          return {
-            ...suggestion,
-            start: suggestion.start - lengthDifference,
-            end: suggestion.end - lengthDifference
-          }
-        }
-        // If this suggestion overlaps with the applied one, it needs to be removed or adjusted
-        else if (suggestion.end > appliedSuggestion.start && suggestion.start < appliedSuggestion.end) {
-          return null // Remove overlapping suggestions
-        }
-        // If this suggestion comes before the applied one, keep it as is
-        else {
-          return suggestion
-        }
-      }
-    }
-
-    const applySuggestion = (suggestion: GrammarSuggestion) => {
-      const appliedText = rawText.substring(suggestion.start, suggestion.end)
-
-      // Create new text with the suggestion applied
-      const newText = rawText.substring(0, suggestion.start) + suggestion.suggestion + rawText.substring(suggestion.end)
-
-      // Update the raw text state
-      setRawText(newText)
-      onChange(newText)
-
-      // Adjust positions of remaining suggestions and remove the applied one
-      setSuggestions((prev) => {
-        const adjustedSuggestions = prev
-          .filter((s) => s !== suggestion) // Remove the applied suggestion
-          .map(adjustSuggestionPositions(suggestion, appliedText, suggestion.suggestion))
-          .filter((s): s is GrammarSuggestion => s !== null) // Remove null suggestions
-        
-        return adjustedSuggestions
-      })
-    }
-
-    const dismissSuggestion = async (suggestion: GrammarSuggestion) => {
-      // Dismiss the suggestion in the grammar checker
-      await dismissGrammarSuggestion(suggestion)
-      
-      // Remove from local suggestions
-      setSuggestions((prev) => prev.filter((s) => s !== suggestion))
-    }
-
-    // Ensure suggestions are passed to parent component whenever they change
+    // Keyboard shortcuts for undo/redo
     useEffect(() => {
-      onSuggestionsChange?.(suggestions)
-    }, [suggestions, onSuggestionsChange])
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (!editor) return
 
+        // Ctrl+Z for undo
+        if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+          event.preventDefault()
+          editor.chain().focus().undo().run()
+        }
+        
+        // Ctrl+U for redo (custom shortcut as requested)
+        if ((event.ctrlKey || event.metaKey) && event.key === 'u') {
+          event.preventDefault()
+          editor.chain().focus().redo().run()
+        }
+      }
+
+      document.addEventListener('keydown', handleKeyDown)
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+      }
+    }, [editor])
+
+    // Expose methods via ref
     useImperativeHandle(ref, () => ({
-      applySuggestion
+      addHighlight: (from: number, to: number, color: 'red' | 'yellow' | 'purple', id: string) => {
+        if (!editor) return
+        
+        const newHighlight: HighlightMark = { from, to, color, id }
+        setCurrentHighlights(prev => [...prev, newHighlight])
+        
+        // Store current cursor position
+        const currentPos = editor.state.selection.from
+        
+        // Apply highlight to editor
+        editor.commands.setTextSelection({ from, to })
+        editor.commands.setMark('textStyle', { highlight: color })
+        
+        // Restore cursor position
+        setTimeout(() => {
+          editor.commands.setTextSelection(currentPos)
+        }, 0)
+      },
+      
+      removeHighlight: (id: string) => {
+        setCurrentHighlights(prev => prev.filter(h => h.id !== id))
+      },
+      
+      clearHighlights: () => {
+        setCurrentHighlights([])
+        if (editor) {
+          editor.commands.unsetMark('textStyle')
+        }
+      },
+      
+      getContent: () => {
+        return editor?.getHTML() || ''
+      },
+      
+      setContent: (content: string) => {
+        if (editor) {
+          const currentPos = editor.state.selection.from
+          editor.commands.setContent(content)
+          // Restore cursor position
+          setTimeout(() => {
+            editor.commands.setTextSelection(currentPos)
+          }, 0)
+        }
+      },
+      
+      focus: () => {
+        editor?.commands.focus()
+      },
+      
+      getCursorPosition: () => cursorPosition,
+      
+      setCursorPosition: (position: number) => {
+        if (editor) {
+          editor.commands.setTextSelection(position)
+        }
+      },
     }))
 
+    // Apply highlights when they change
+    useEffect(() => {
+      if (!editor || highlights.length === 0) return
+      
+      setCurrentHighlights(highlights)
+      
+      // Store current cursor position
+      const currentPos = editor.state.selection.from
+      
+      // Apply highlights to editor
+      highlights.forEach(highlight => {
+        editor.commands.setTextSelection({ from: highlight.from, to: highlight.to })
+        editor.commands.setMark('textStyle', { highlight: highlight.color })
+      })
+      
+      // Restore cursor position
+      setTimeout(() => {
+        editor.commands.setTextSelection(currentPos)
+      }, 0)
+    }, [highlights, editor])
+
+    // Handle highlight clicks
+    const handleHighlightClick = useCallback((event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (target.classList.contains('highlight-red') || 
+          target.classList.contains('highlight-yellow') || 
+          target.classList.contains('highlight-purple')) {
+        const highlightId = target.getAttribute('data-highlight-id')
+        if (highlightId && onHighlightClick) {
+          const highlight = currentHighlights.find(h => h.id === highlightId)
+          if (highlight) {
+            onHighlightClick(highlight)
+          }
+        }
+      }
+    }, [currentHighlights, onHighlightClick])
+
+    useEffect(() => {
+      const editorElement = editorRef.current
+      if (editorElement) {
+        editorElement.addEventListener('click', handleHighlightClick)
+        return () => {
+          editorElement.removeEventListener('click', handleHighlightClick)
+        }
+      }
+    }, [handleHighlightClick])
+
+    if (!editor) {
+      return <div>Loading editor...</div>
+    }
+
     return (
-      <div className="space-y-4">
+      <div className="w-full">
         {/* Title Input */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          className="w-full text-2xl font-bold border-none outline-none bg-gray-50 rounded-lg px-4 py-3 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
-          placeholder="Document Title"
-        />
+        <div className="mb-6">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Document title..."
+            className="w-full text-2xl font-bold bg-transparent border-none outline-none placeholder-gray-400"
+          />
+        </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-3 border-b bg-gray-50 rounded-t-lg">
-          <div className="flex items-center space-x-4">
-            {/* Font Selection */}
-            <select
-              value={selectedFont}
-              onChange={(e) => handleFontChange(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border">
+          {/* Text Formatting */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant={editor.isActive('bold') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className="h-8 w-8 p-0"
             >
-              <option value="serif">Serif</option>
-              <option value="sans-serif">Sans Serif</option>
-              <option value="monospace">Monospace</option>
-            </select>
-
-            {/* Formatting Buttons */}
-            <div className="flex items-center space-x-1">
-              <button
-                type="button"
-                onClick={() => execCommand("bold")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Bold"
-              >
-                <Bold className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => execCommand("italic")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Italic"
-              >
-                <Italic className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => execCommand("underline")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Underline"
-              >
-                <Underline className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Alignment Buttons */}
-            <div className="flex items-center space-x-1 border-l pl-4">
-              <button
-                type="button"
-                onClick={() => execCommand("justifyLeft")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Align Left"
-              >
-                <AlignLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => execCommand("justifyCenter")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Align Center"
-              >
-                <AlignCenter className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => execCommand("justifyRight")}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
-                title="Align Right"
-              >
-                <AlignRight className="h-4 w-4" />
-              </button>
-            </div>
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive('italic') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className="h-8 w-8 p-0"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive('underline') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              className="h-8 w-8 p-0"
+            >
+              <UnderlineIcon className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Grammar Check Controls */}
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={() => handleGrammarCheck(true)}
-              disabled={isCheckingGrammar}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+          <div className="w-px h-6 bg-gray-300" />
+
+          {/* Text Alignment */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant={editor.isActive({ textAlign: 'left' }) ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().setTextAlign('left').run()}
+              className="h-8 w-8 p-0"
             >
-              {isCheckingGrammar ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-900 mr-2"></div>
-                  Checking...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Check All
-                </>
-              )}
-            </button>
+              <AlignLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive({ textAlign: 'center' }) ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().setTextAlign('center').run()}
+              className="h-8 w-8 p-0"
+            >
+              <AlignCenter className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive({ textAlign: 'right' }) ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().setTextAlign('right').run()}
+              className="h-8 w-8 p-0"
+            >
+              <AlignRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive({ textAlign: 'justify' }) ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+              className="h-8 w-8 p-0"
+            >
+              <AlignJustify className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="w-px h-6 bg-gray-300" />
+
+          {/* Font Family */}
+          <div className="flex items-center gap-2">
+            <Type className="h-4 w-4 text-gray-500" />
+            <Select
+              value={editor.getAttributes('textStyle').fontFamily || 'Arial, sans-serif'}
+              onValueChange={(value) => editor.chain().focus().setFontFamily(value).run()}
+            >
+              <SelectTrigger className="w-32 h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FONT_FAMILIES.map((font) => (
+                  <SelectItem key={font.value} value={font.value}>
+                    {font.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-px h-6 bg-gray-300" />
+
+          {/* Font Size */}
+          <div className="flex items-center gap-2">
+            <Select
+              value={editor.getAttributes('textStyle').fontSize || '16px'}
+              onValueChange={(value) => editor.chain().focus().setMark('textStyle', { fontSize: value }).run()}
+            >
+              <SelectTrigger className="w-20 h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {['12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px'].map((size) => (
+                  <SelectItem key={size} value={size}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-px h-6 bg-gray-300" />
+
+          {/* Undo/Redo */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => editor.chain().focus().undo().run()}
+              disabled={!editor.can().undo()}
+              className="h-8 w-8 p-0"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => editor.chain().focus().redo().run()}
+              disabled={!editor.can().redo()}
+              className="h-8 w-8 p-0"
+              title="Redo (Ctrl+U)"
+            >
+              <Redo className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
-        {/* Grammar Suggestions */}
-        {suggestions.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h3 className="font-medium text-yellow-800 mb-3 flex items-center">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Writing Suggestion
-            </h3>
-            <div className="bg-white p-3 rounded border">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className="line-through text-red-600 font-medium">{suggestions[0].text}</span>
-                    <span className="text-gray-400">→</span>
-                    <span className="text-green-600 font-medium">{suggestions[0].suggestion}</span>
-                  </div>
-                  {suggestions[0].description && <p className="text-xs text-gray-500">{suggestions[0].description}</p>}
-                  <span className={`inline-block px-2 py-1 text-xs rounded mt-1 ${
-                    suggestions[0].type === 'spelling' 
-                      ? 'bg-red-100 text-red-600' 
-                      : suggestions[0].type === 'grammar'
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-purple-100 text-purple-600'
-                  }`}>
-                    {suggestions[0].type || "style"}
-                  </span>
-                  {suggestions.length > 1 && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      +{suggestions.length - 1} more suggestion{suggestions.length > 2 ? 's' : ''}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2 ml-4">
-                  <button
-                    type="button"
-                    onClick={() => applySuggestion(suggestions[0])}
-                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    Apply
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissSuggestion(suggestions[0])}
-                    className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Editor Content */}
+        <div 
+          ref={editorRef}
+          className="border rounded-lg bg-white min-h-[400px] focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500"
+        >
+          <EditorContent editor={editor} />
+        </div>
+
+        {/* Bubble Menu for quick formatting */}
+        {editor && (
+          <BubbleMenu 
+            editor={editor} 
+            tippyOptions={{ duration: 100 }}
+            className="flex items-center gap-1 p-2 bg-white border rounded-lg shadow-lg"
+          >
+            <Button
+              variant={editor.isActive('bold') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className="h-8 w-8 p-0"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive('italic') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className="h-8 w-8 p-0"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={editor.isActive('underline') ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              className="h-8 w-8 p-0"
+            >
+              <UnderlineIcon className="h-4 w-4" />
+            </Button>
+          </BubbleMenu>
         )}
 
-        {/* Editor */}
-        <div
-          ref={editorRef}
-          contentEditable
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-          className="min-h-96 p-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          style={{ fontFamily: selectedFont }}
-          suppressContentEditableWarning={true}
-          data-placeholder="Start writing your document..."
-        />
-
-        {/* Grammar Status */}
-        <div className="text-xs text-gray-500 flex items-center justify-between">
-          <span>Auto-checking enabled • Spell check on spacebar • Style/grammar every 10s</span>
-          {suggestions.length > 0 && (
-            <span className="text-yellow-600">
-              {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""} found
-            </span>
-          )}
-        </div>
+        {/* Highlight Styles */}
+        <style jsx global>{`
+          .highlight-red {
+            background-color: rgba(239, 68, 68, 0.3);
+            border-bottom: 2px solid #ef4444;
+            cursor: pointer;
+          }
+          .highlight-yellow {
+            background-color: rgba(234, 179, 8, 0.3);
+            border-bottom: 2px solid #eab308;
+            cursor: pointer;
+          }
+          .highlight-purple {
+            background-color: rgba(147, 51, 234, 0.3);
+            border-bottom: 2px solid #9333ea;
+            cursor: pointer;
+          }
+          .ProseMirror {
+            outline: none;
+            min-height: 400px;
+            padding: 1rem;
+          }
+          .ProseMirror p.is-editor-empty:first-child::before {
+            color: #adb5bd;
+            content: attr(data-placeholder);
+            float: left;
+            height: 0;
+            pointer-events: none;
+          }
+        `}</style>
       </div>
     )
   }
 )
+
+RichTextEditor.displayName = 'RichTextEditor' 

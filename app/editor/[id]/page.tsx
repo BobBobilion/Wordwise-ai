@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthGuard } from "@/components/auth-guard"
 import { getDocument, updateDocument } from "@/lib/firestore"
-import type { Document } from "@/lib/types"
+import type { Document, GrammarSuggestion, HighlightMark } from "@/lib/types"
 import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor"
 import { Button } from "@/components/ui/button"
 import { toast, ToastContainer } from "react-toastify"
@@ -14,7 +14,6 @@ import { ArrowLeft, Save, Loader2, BookOpen } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { useDebounce } from "@/hooks/use-debounce"
 import { WritingSidebar } from "@/components/sidebar/writing-sidebar"
-import type { GrammarSuggestion } from "@/lib/types"
 import { DownloadButton } from "@/components/ui/download-button"
 import { cleanTextContent } from "@/lib/utils"
 
@@ -26,7 +25,9 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [suggestions, setSuggestions] = useState<GrammarSuggestion[]>([])
+  const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
+  const [highlights, setHighlights] = useState<HighlightMark[]>([])
+  const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
   const editorRef = useRef<RichTextEditorRef>(null)
 
   const documentId = params.id as string
@@ -47,6 +48,13 @@ export default function EditorPage() {
       saveDocument()
     }
   }, [debouncedContent, debouncedTitle])
+
+  // Grammar checking effect
+  useEffect(() => {
+    if (document?.content && document.content.length > 10) {
+      checkGrammar(document.content)
+    }
+  }, [debouncedContent])
 
   const loadDocument = async () => {
     try {
@@ -89,6 +97,104 @@ export default function EditorPage() {
     }
   }, [document, documentId])
 
+  const checkGrammar = async (content: string) => {
+    if (!content.trim() || isCheckingGrammar) return
+
+    setIsCheckingGrammar(true)
+    try {
+      const response = await fetch('/api/grammar-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: content }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setGrammarSuggestions(data.suggestions || [])
+        
+        // Convert grammar suggestions to highlights
+        const newHighlights: HighlightMark[] = data.suggestions.map((suggestion: GrammarSuggestion, index: number) => ({
+          from: suggestion.start,
+          to: suggestion.end,
+          color: suggestion.type === 'grammar' ? 'red' : 'yellow',
+          id: `grammar-${index}-${Date.now()}`,
+        }))
+        
+        setHighlights(newHighlights)
+      }
+    } catch (error) {
+      console.error('Failed to check grammar:', error)
+    } finally {
+      setIsCheckingGrammar(false)
+    }
+  }
+
+  const handleApplySuggestion = (suggestion: GrammarSuggestion) => {
+    if (!editorRef.current || !document) return
+
+    // Get current content
+    const currentContent = editorRef.current.getContent()
+    
+    // Replace the problematic text with the suggestion
+    const newContent = currentContent.slice(0, suggestion.start) + 
+                      suggestion.suggestion + 
+                      currentContent.slice(suggestion.end)
+    
+    // Update document content
+    setDocument({ ...document, content: newContent })
+    
+    // Remove the highlight for this suggestion
+    setHighlights(prev => prev.filter(h => 
+      !(h.from === suggestion.start && h.to === suggestion.end)
+    ))
+    
+    // Remove the suggestion from the list
+    setGrammarSuggestions(prev => prev.filter(s => 
+      !(s.start === suggestion.start && s.end === suggestion.end)
+    ))
+  }
+
+  const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {
+    // Remove the highlight for this suggestion
+    setHighlights(prev => prev.filter(h => 
+      !(h.from === suggestion.start && h.to === suggestion.end)
+    ))
+    
+    // Remove the suggestion from the list
+    setGrammarSuggestions(prev => prev.filter(s => 
+      !(s.start === suggestion.start && s.end === suggestion.end)
+    ))
+  }
+
+  const handleHighlightClick = (highlight: HighlightMark) => {
+    // Find the corresponding suggestion
+    const suggestion = grammarSuggestions.find(s => 
+      s.start === highlight.from && s.end === highlight.to
+    )
+    
+    if (suggestion) {
+      // Show a toast with the suggestion details
+      toast.info(
+        <div>
+          <div className="font-semibold">Suggestion:</div>
+          <div className="text-sm mt-1">
+            <span className="text-red-600">{suggestion.text}</span> → 
+            <span className="text-green-600 ml-1">{suggestion.suggestion}</span>
+          </div>
+          {suggestion.description && (
+            <div className="text-xs text-gray-600 mt-1">{suggestion.description}</div>
+          )}
+        </div>,
+        {
+          autoClose: 5000,
+          closeButton: true,
+        }
+      )
+    }
+  }
+
   // Keyboard shortcut handler for Ctrl+S
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -123,17 +229,6 @@ export default function EditorPage() {
     if (document) {
       setDocument({ ...document, title })
     }
-  }
-
-  const handleApplySuggestion = (suggestion: GrammarSuggestion) => {
-    // Use the editor ref to apply the suggestion
-    if (editorRef.current) {
-      editorRef.current.applySuggestion(suggestion)
-    }
-  }
-
-  const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {
-    setSuggestions((prev) => prev.filter((s) => s !== suggestion))
   }
 
   const handleBackToDashboard = async () => {
@@ -206,6 +301,13 @@ export default function EditorPage() {
                   )}
                 </div>
 
+                {isCheckingGrammar && (
+                  <div className="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+                    Checking grammar...
+                  </div>
+                )}
+
                 <DownloadButton document={document} />
 
                 <Button 
@@ -233,7 +335,8 @@ export default function EditorPage() {
                   onChange={handleContentChange}
                   title={document.title}
                   onTitleChange={handleTitleChange}
-                  onSuggestionsChange={setSuggestions}
+                  highlights={highlights}
+                  onHighlightClick={handleHighlightClick}
                   ref={editorRef}
                 />
               </div>
@@ -241,7 +344,7 @@ export default function EditorPage() {
           </div>
           <WritingSidebar
             content={document.content}
-            suggestions={suggestions}
+            suggestions={grammarSuggestions}
             onApplySuggestion={handleApplySuggestion}
             onDismissSuggestion={handleDismissSuggestion}
           />
