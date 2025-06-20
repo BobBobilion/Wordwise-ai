@@ -18,6 +18,44 @@ export interface RichTextEditorRef {
   applySuggestion: (suggestion: GrammarSuggestion) => void
 }
 
+// Generate highlighted HTML from raw text and suggestions (moved outside component to prevent recreation)
+const generateHighlightedHTML = (text: string, currentSuggestions: GrammarSuggestion[]) => {
+  if (!text) {
+    return ""
+  }
+  
+  if (currentSuggestions.length === 0) {
+    return text
+  }
+
+  let highlightedHTML = ''
+  let currentPos = 0
+  
+  // Sort suggestions by start position
+  const sortedSuggestions = [...currentSuggestions].sort((a, b) => a.start - b.start)
+  
+  for (const suggestion of sortedSuggestions) {
+    // Add text before this suggestion
+    if (suggestion.start > currentPos) {
+      highlightedHTML += text.substring(currentPos, suggestion.start)
+    }
+    
+    // Add highlighted suggestion
+    const suggestionText = text.substring(suggestion.start, suggestion.end)
+    const color = suggestion.type === 'spelling' ? '#ef4444' : '#f59e0b'
+    highlightedHTML += `<span style="text-decoration: underline; text-decoration-color: ${color}; text-decoration-thickness: 2px; text-underline-offset: 2px;">${suggestionText}</span>`
+    
+    currentPos = suggestion.end
+  }
+  
+  // Add remaining text
+  if (currentPos < text.length) {
+    highlightedHTML += text.substring(currentPos)
+  }
+  
+  return highlightedHTML
+}
+
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
   ({ content, onChange, onTitleChange, title, onSuggestionsChange }, ref) => {
     const editorRef = useRef<HTMLDivElement>(null)
@@ -26,50 +64,117 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
     const [lastKeyPressed, setLastKeyPressed] = useState<string>("")
     const [isGrammarCheckInProgress, setIsGrammarCheckInProgress] = useState(false)
+    const [rawText, setRawText] = useState("") // Store clean text without HTML markup
+    const [cursorPosition, setCursorPosition] = useState(0) // Track cursor position as character offset
 
+    // Initialize rawText from content
     useEffect(() => {
-      if (editorRef.current && editorRef.current.innerHTML !== content) {
-        editorRef.current.innerHTML = content
+      if (content) {
+        // Extract clean text from HTML content
+        const tempDiv = document.createElement('div')
+        tempDiv.innerHTML = content
+        const cleanText = tempDiv.innerText || tempDiv.textContent || ""
+        setRawText(cleanText)
       }
     }, [content])
 
-    // Spell checker: runs on spacebar press and every 5 seconds
+    // Function to get cursor position as character offset
+    const getCaretCharacterOffsetWithin = (element: HTMLElement): number => {
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) return 0
+
+      const range = selection.getRangeAt(0)
+      const preCaretRange = range.cloneRange()
+      preCaretRange.selectNodeContents(element)
+      preCaretRange.setEnd(range.endContainer, range.endOffset)
+      return preCaretRange.toString().length
+    }
+
+    // Function to set cursor position from character offset
+    const setCaretPosition = (element: HTMLElement, offset: number) => {
+      const selection = window.getSelection()
+      const range = document.createRange()
+
+      let currentNode: Node | null = null
+      let currentOffset = 0
+
+      function traverse(node: Node): boolean {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const textLength = (node.textContent || "").length
+          if (currentOffset + textLength >= offset) {
+            currentNode = node
+            offset -= currentOffset
+            return true
+          }
+          currentOffset += textLength
+        } else {
+          for (let i = 0; i < node.childNodes.length; i++) {
+            if (traverse(node.childNodes[i])) return true
+          }
+        }
+        return false
+      }
+
+      traverse(element)
+
+      if (currentNode && selection) {
+        range.setStart(currentNode, Math.min(offset, (currentNode.textContent || "").length))
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+
+    // Update editor display when rawText or suggestions change
+    useEffect(() => {
+      if (editorRef.current) {
+        const highlightedHTML = generateHighlightedHTML(rawText, suggestions)
+        if (editorRef.current.innerHTML !== highlightedHTML) {
+          // Save current cursor position
+          const wasFocused = document.activeElement === editorRef.current
+          const currentCursorPos = wasFocused ? getCaretCharacterOffsetWithin(editorRef.current) : cursorPosition
+          
+          editorRef.current.innerHTML = highlightedHTML
+          
+          // Restore cursor position if editor was focused
+          if (wasFocused && editorRef.current) {
+            editorRef.current.focus()
+            setCaretPosition(editorRef.current, currentCursorPos)
+          }
+        }
+      }
+    }, [rawText, suggestions, cursorPosition])
+
+    // Spell checker: runs on spacebar press and every 10 seconds
     useEffect(() => {
       if (typeof window === 'undefined') return
 
       const intervalId = setInterval(() => {
-        if (editorRef.current) {
-          const text = editorRef.current.innerText
-          if (text.trim().length > 20 && !isGrammarCheckInProgress) {
-            // Wrap in try-catch to prevent crashes
-            try {
-              setIsGrammarCheckInProgress(true)
-              handleSpellCheck(false, false) // Silent check every 10 seconds, no force check
-            } catch (error) {
-              console.error('Spell check interval error:', error)
-            } finally {
-              setIsGrammarCheckInProgress(false)
-            }
+        if (rawText.trim().length > 20 && !isGrammarCheckInProgress) {
+          try {
+            setIsGrammarCheckInProgress(true)
+            handleSpellCheck(false, false)
+          } catch (error) {
+            console.error('Spell check interval error:', error)
+          } finally {
+            setIsGrammarCheckInProgress(false)
           }
         }
-      }, 10000) // Check every 10 seconds
+      }, 10000)
 
       return () => clearInterval(intervalId)
-    }, [isGrammarCheckInProgress])
-
-    // Style and grammar checker: runs every 5 seconds
-    useEffect(() => {
-      if (typeof window === 'undefined') return
-
-      // Temporarily disabled style/grammar check interval to prevent freezing
-      // Will be re-enabled once we find a non-blocking solution
-      return () => {}
-    }, [])
+    }, [rawText, isGrammarCheckInProgress])
 
     const handleInput = useCallback(() => {
       if (editorRef.current) {
-        const newContent = editorRef.current.innerHTML
-        onChange(newContent)
+        // Extract clean text from the editor
+        const newRawText = editorRef.current.innerText || editorRef.current.textContent || ""
+        setRawText(newRawText)
+        onChange(newRawText) // Pass clean text to parent
+        
+        // Update cursor position
+        const newCursorPos = getCaretCharacterOffsetWithin(editorRef.current)
+        setCursorPosition(newCursorPos)
       }
     }, [onChange])
 
@@ -78,14 +183,11 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       if (e.key === " " && typeof window !== 'undefined') {
         setLastKeyPressed(" ")
         // Trigger spell check on spacebar
-        if (editorRef.current) {
-          const text = editorRef.current.innerText
-          if (text.trim().length > 5) {
-            handleSpellCheck(false, false) // Silent check on spacebar, no force check
-          }
+        if (rawText.trim().length > 5) {
+          handleSpellCheck(false, false)
         }
       }
-    }, [])
+    }, [rawText])
 
     const execCommand = (command: string, value?: string) => {
       document.execCommand(command, false, value)
@@ -100,18 +202,14 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
 
     const handleSpellCheck = async (showNotification = true, forceCheck = false) => {
-      if (!editorRef.current) return
-
-      const text = editorRef.current.innerText
-      if (!text.trim()) return
-
+      if (!rawText.trim()) return
       if (isGrammarCheckInProgress) return
 
       if (showNotification) setIsCheckingGrammar(true)
 
       try {
         setIsGrammarCheckInProgress(true)
-        const spellSuggestions = await checkSpelling(text, forceCheck) // Only force check when explicitly requested
+        const spellSuggestions = await checkSpelling(rawText, forceCheck)
         
         // Merge with existing suggestions, keeping style/grammar suggestions
         setSuggestions(prev => {
@@ -128,11 +226,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
 
     const handleStyleAndGrammarCheck = async (showNotification = true) => {
-      if (!editorRef.current) return
-
-      const text = editorRef.current.innerText
-      if (!text.trim()) return
-
+      if (!rawText.trim()) return
       if (isGrammarCheckInProgress) return
 
       if (showNotification) setIsCheckingGrammar(true)
@@ -195,18 +289,14 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
 
     const applySuggestion = (suggestion: GrammarSuggestion) => {
-      if (!editorRef.current) return
-
-      const text = editorRef.current.innerText
-      const appliedText = text.substring(suggestion.start, suggestion.end)
+      const appliedText = rawText.substring(suggestion.start, suggestion.end)
 
       // Create new text with the suggestion applied
-      const newText = text.substring(0, suggestion.start) + suggestion.suggestion + text.substring(suggestion.end)
+      const newText = rawText.substring(0, suggestion.start) + suggestion.suggestion + rawText.substring(suggestion.end)
 
-      // Update the editor content
-      editorRef.current.innerText = newText
-      // Use innerText instead of innerHTML to avoid HTML entities like &nbsp;
-      onChange(editorRef.current.innerText)
+      // Update the raw text state
+      setRawText(newText)
+      onChange(newText)
 
       // Adjust positions of remaining suggestions and remove the applied one
       setSuggestions((prev) => {
@@ -221,10 +311,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
     const dismissSuggestion = async (suggestion: GrammarSuggestion) => {
       // Dismiss the suggestion in the grammar checker
-      if (editorRef.current) {
-        const text = editorRef.current.innerText
-        await dismissGrammarSuggestion(suggestion, text)
-      }
+      await dismissGrammarSuggestion(suggestion)
       
       // Remove from local suggestions
       setSuggestions((prev) => prev.filter((s) => s !== suggestion))
@@ -234,114 +321,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     useEffect(() => {
       onSuggestionsChange?.(suggestions)
     }, [suggestions, onSuggestionsChange])
-
-    // Function to get cursor position as character offset
-    const getCaretCharacterOffsetWithin = (element: HTMLElement): number => {
-      const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0) return 0
-
-      const range = selection.getRangeAt(0)
-      const preCaretRange = range.cloneRange()
-      preCaretRange.selectNodeContents(element)
-      preCaretRange.setEnd(range.endContainer, range.endOffset)
-      return preCaretRange.toString().length
-    }
-
-    // Function to set cursor position from character offset
-    const setCaretPosition = (element: HTMLElement, offset: number) => {
-      const selection = window.getSelection()
-      const range = document.createRange()
-
-      let currentNode: Node | null = null
-      let currentOffset = 0
-
-      function traverse(node: Node): boolean {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const textLength = (node.textContent || "").length
-          if (currentOffset + textLength >= offset) {
-            currentNode = node
-            offset -= currentOffset
-            return true
-          }
-          currentOffset += textLength
-        } else {
-          for (let i = 0; i < node.childNodes.length; i++) {
-            if (traverse(node.childNodes[i])) return true
-          }
-        }
-        return false
-      }
-
-      traverse(element)
-
-      if (currentNode && selection) {
-        range.setStart(currentNode, offset)
-        range.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-    }
-
-    // Function to apply highlighting to text without moving cursor
-    const applyHighlighting = useCallback(() => {
-      if (!editorRef.current || suggestions.length === 0) return
-
-      const editor = editorRef.current
-      const text = editor.innerText
-      
-      // Save current selection and focus state
-      const wasFocused = document.activeElement === editor
-      const currentScrollTop = editor.scrollTop
-      const currentScrollLeft = editor.scrollLeft
-      
-      // Save cursor position as character offset
-      const cursorOffset = wasFocused ? getCaretCharacterOffsetWithin(editor) : 0
-      
-      // Create highlighted HTML
-      let highlightedHTML = ''
-      let currentPos = 0
-      
-      // Sort suggestions by start position
-      const sortedSuggestions = [...suggestions].sort((a, b) => a.start - b.start)
-      
-      for (const suggestion of sortedSuggestions) {
-        // Add text before this suggestion
-        if (suggestion.start > currentPos) {
-          highlightedHTML += text.substring(currentPos, suggestion.start)
-        }
-        
-        // Add highlighted suggestion
-        const suggestionText = text.substring(suggestion.start, suggestion.end)
-        const color = suggestion.type === 'spelling' ? '#ef4444' : '#f59e0b'
-        highlightedHTML += `<span style="text-decoration: underline; text-decoration-color: ${color}; text-decoration-thickness: 2px; text-underline-offset: 2px;">${suggestionText}</span>`
-        
-        currentPos = suggestion.end
-      }
-      
-      // Add remaining text
-      if (currentPos < text.length) {
-        highlightedHTML += text.substring(currentPos)
-      }
-      
-      // Update content
-      editor.innerHTML = highlightedHTML
-      
-      // Restore scroll position
-      editor.scrollTop = currentScrollTop
-      editor.scrollLeft = currentScrollLeft
-      
-      // Restore focus and cursor position
-      if (wasFocused) {
-        editor.focus()
-        setCaretPosition(editor, cursorOffset)
-      }
-    }, [suggestions])
-
-    // Apply highlighting when suggestions change
-    useEffect(() => {
-      const timer = setTimeout(applyHighlighting, 50) // Small delay to ensure typing is complete
-      return () => clearTimeout(timer)
-    }, [suggestions, applyHighlighting])
 
     useImperativeHandle(ref, () => ({
       applySuggestion
@@ -518,7 +497,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
         {/* Grammar Status */}
         <div className="text-xs text-gray-500 flex items-center justify-between">
-          <span>Auto-checking enabled • Spell check on spacebar • Style/grammar every 5s</span>
+          <span>Auto-checking enabled • Spell check on spacebar • Style/grammar every 10s</span>
           {suggestions.length > 0 && (
             <span className="text-yellow-600">
               {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""} found

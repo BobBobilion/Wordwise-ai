@@ -48,10 +48,6 @@ They'd crack each other up! 🥚
 
 ---
 
-Why do programmers prefer dark mode? Because light attracts bugs! 🐛
-
----
-
 Why did the programmer quit his job? Because he didn't get arrays! 😄
 
 ---
@@ -60,8 +56,87 @@ Why do programmers prefer dark mode? Because light attracts bugs! 🐛
 
 ---
 
-Why did the programmer go broke? Because he used up all his cache! 💰
+Why did the programmer go broke? Because he used up all his cache! 💰💻
 
 ---
 
-Why do programmers prefer dark mode? Because light attracts bugs! 🐛 
+Why do programmers prefer dark mode? Because light attracts bugs! 🐛
+
+---
+
+Why did the React component feel lonely?
+Because it had no props! 🎭
+
+---
+
+What do you call a programmer from Finland? Nerdic!
+
+---
+
+Why did the math book look so sad? Because it had too many problems!
+
+---
+
+What do you call a can opener that doesn't work? A can't opener!
+
+---
+
+Why did the cookie go to the doctor? Because it was feeling crumbly!
+
+---
+
+Why did the API call fail? Because it had too many requests! 📡
+
+---
+
+Why did the TypeScript developer go broke?
+Because he couldn't afford the type definitions! 💸
+
+---
+
+Why did the regex cross the road?
+To get to the other side of the string! 🛣️
+
+---
+
+Why don't programmers like to go outside?
+Because there are too many bugs and the sun causes glare on their screens! ☀️🐛
+
+---
+
+Why did the developer break up with CSS?
+Because it had too many issues with their relationship! 💔
+
+---
+
+Why do programmers prefer dark chocolate?
+Because it's less likely to have bugs than milk chocolate! 🍫
+
+Why did the programmer increase the token limit?
+Because they wanted their AI to have more *character*! 🤖✨
+
+Why don't programmers like to share their logs?
+Because they prefer to keep their *console-idential* information private! 🤫📝
+
+---
+
+Why did the AI writing assistant become a comedian?
+Because it had the best *character* analysis! 🎭✨
+
+---
+
+Why did the non-fiction writer get lost in the library?
+Because they couldn't find the right *genre-ation*! 📚🗺️
+
+Why don't programmers trust atoms? Because they make up everything... and then they crash when you try to debug them! 🔬💻
+
+What do you call a programmer who works at a bakery? A batch processor! 🥖💻
+
+Why did the developer go broke? Because he used up all his cache! 💸💻
+
+Why did the AI go to therapy? Because it had too many deep learning issues! 🧠💭 
+
+---
+
+Why did the programmer get kicked out of the restaurant?
+Because he kept trying to order from the menu using SQL queries! 🍽️💻 

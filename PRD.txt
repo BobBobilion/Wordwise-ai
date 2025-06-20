@@ -18,9 +18,9 @@
 [X] Fetch list of user documents
 [X] Update existing documents with edits
 [X] Delete documents from Firestore
-[~] Add document search & sort features
-[ ] Enable keyword seach by title
-[ ] Implement sorting by creation date, modified date, word count
+[X] Add document search & sort features
+[X] Enable keyword search by title
+[X] Implement sorting by creation date, modified date, word count
 [~] Implement file upload support
 [~] Accept .txt, .doc, and .docx files
 [ ] Parse and convert to plain text or HTML for editing
@@ -46,14 +46,21 @@
 [ ] Implement preview and confirmation pop-up
 [ ] Replace all occurrences of character name in document
 [X] Phase 4: Implementation Layer
-[X] Implement advanced grammar and style correction
-[~] Use local grammar checking libraries (typo-js for spelling, write-good for style)
-[X] Show inline grammar, spelling, and punctuation suggestions
-[~] Show style suggestions (clarity, active voice, etc.)
-[~] Implement dismiss functionality for suggestions
-[~] Allow users to dismiss individual suggestions to prevent them from reappearing
-[~] Track dismissed suggestions with context-aware hashing
-[~] Automatically clear dismissed suggestions when text is modified
+[X] Implement AI-powered grammar and style correction
+[X] Replaced local grammar libraries with GPT-4o-Mini API integration
+[X] Implemented 5-word text segmentation for optimal token usage
+[X] Added smart triggers: after 5th word completion or 3-second pause
+[X] Implemented in-memory caching for unchanged text segments
+[X] Added sessionStorage for dismissed suggestions (per session)
+[X] Show inline grammar, spelling, and punctuation suggestions via AI
+[X] Show AI-powered style suggestions (clarity, active voice, etc.)
+[X] Implement dismiss functionality for suggestions
+[X] Allow users to dismiss individual suggestions to prevent them from reappearing
+[X] Track dismissed suggestions with unique ID hashing
+[X] Automatically clear dismissed suggestions when text is modified
+[X] Created smart grammar check hook (useSmartGrammarCheck)
+[X] Optimized API calls to stay within 1000 token limit
+[X] Added loading states and error handling for AI suggestions
 [X] Build AI-powered "Overview" tab
 [X] Highlight any section of text for analysis
 [X] Use AI to analyze mood and tone
@@ -79,7 +86,7 @@
 [X] Implement sort by most recently created
 [X] Add download button (.docx) to each document card
 [X] Add upload button supporting .doc, .docx, and .txt files
-[ ] Add delete button with verification dialog to each document card
+[X] Add delete button with verification dialog to each document card
 [X] Phase 6: Enhanced Editor Features
 [X] Add download button with multiple format options (.txt, .docx, .pdf)
 [X] Add keyboard shortcut support (Ctrl+S to save)

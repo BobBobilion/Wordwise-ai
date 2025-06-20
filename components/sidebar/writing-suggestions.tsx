@@ -7,14 +7,25 @@ interface WritingSuggestionsProps {
   suggestions: GrammarSuggestion[]
   onApplySuggestion: (suggestion: GrammarSuggestion) => void
   onDismissSuggestion: (suggestion: GrammarSuggestion) => void
+  isChecking?: boolean
 }
 
-export function WritingSuggestions({ suggestions, onApplySuggestion, onDismissSuggestion }: WritingSuggestionsProps) {
+export function WritingSuggestions({ suggestions, onApplySuggestion, onDismissSuggestion, isChecking = false }: WritingSuggestionsProps) {
   // Debug logging
   console.log('WritingSuggestions received:', suggestions.length, 'suggestions:', suggestions)
   
   const spellingIssues = suggestions.filter((s) => s.type === "spelling")
   const grammarIssues = suggestions.filter((s) => s.type === "grammar" || s.type === "style")
+
+  if (isChecking) {
+    return (
+      <div className="p-4 text-center">
+        <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Checking...</h3>
+        <p className="text-sm text-gray-600">Analyzing your text with AI.</p>
+      </div>
+    )
+  }
 
   if (suggestions.length === 0) {
     return (

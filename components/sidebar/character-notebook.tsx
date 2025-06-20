@@ -47,15 +47,23 @@ interface CharacterImageError {
 
 // Function to convert markdown to HTML safely
 function markdownToHtml(text: string): string {
-  return text
-    // Convert **bold** to <strong> tags
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Convert *italic* to <em> tags
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Convert `code` to <code> tags
-    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
-    // Convert line breaks to <br> tags
-    .replace(/\n/g, '<br>')
+  let result = text
+  
+  // First pass: Convert **bold** to <strong> tags
+  // Use a simple but effective approach
+  result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  
+  // Second pass: Convert *italic* to <em> tags
+  // Only match single asterisks that aren't part of HTML tags
+  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  
+  // Convert `code` to <code> tags
+  result = result.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
+  
+  // Convert line breaks to <br> tags
+  result = result.replace(/\n/g, '<br>')
+  
+  return result
 }
 
 // Function to safely render HTML content

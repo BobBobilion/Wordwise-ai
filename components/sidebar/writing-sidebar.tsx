@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { WritingOverview } from "./writing-overview"
 import { WritingSuggestions } from "./writing-suggestions"
 import { CharacterNotebook } from "./character-notebook"
@@ -18,6 +18,10 @@ type TabType = "overview" | "suggestions" | "characters" | "plot"
 
 export function WritingSidebar({ content, suggestions, onApplySuggestion, onDismissSuggestion }: WritingSidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview")
+  
+  // Keep references to persist component state across tab switches
+  const charactersRef = useRef<HTMLDivElement>(null)
+  const plotRef = useRef<HTMLDivElement>(null)
 
   const tabs = [
     { id: "overview" as TabType, label: "Writing Overview" },
@@ -47,18 +51,33 @@ export function WritingSidebar({ content, suggestions, onApplySuggestion, onDism
         </nav>
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto bg-white/30">
-        {activeTab === "overview" && <WritingOverview content={content} />}
-        {activeTab === "suggestions" && (
+      {/* Tab Content - Keep all components mounted but show/hide them */}
+      <div className="flex-1 overflow-y-auto bg-white/30 relative">
+        <div className={`${activeTab === "overview" ? "block" : "hidden"} h-full`}>
+          <WritingOverview content={content} />
+        </div>
+        
+        <div className={`${activeTab === "suggestions" ? "block" : "hidden"} h-full`}>
           <WritingSuggestions
             suggestions={suggestions}
             onApplySuggestion={onApplySuggestion}
             onDismissSuggestion={onDismissSuggestion}
           />
-        )}
-        {activeTab === "characters" && <CharacterNotebook content={content} />}
-        {activeTab === "plot" && <PlotSummary content={content} />}
+        </div>
+        
+        <div 
+          ref={charactersRef}
+          className={`${activeTab === "characters" ? "block" : "hidden"} h-full`}
+        >
+          <CharacterNotebook content={content} />
+        </div>
+        
+        <div 
+          ref={plotRef}
+          className={`${activeTab === "plot" ? "block" : "hidden"} h-full`}
+        >
+          <PlotSummary content={content} />
+        </div>
       </div>
     </div>
   )

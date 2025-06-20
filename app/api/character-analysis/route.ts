@@ -4,11 +4,13 @@ import { openai } from "@ai-sdk/openai"
 
 // Constants for configuration
 const MIN_TEXT_LENGTH = 50
-const MAX_TOKENS = 400
+const MAX_TOKENS = 1500 // Significantly increased for comprehensive character analysis
 const TEMPERATURE = 0.3 // Lower temperature for more consistent analysis
 
 // System prompt for character analysis
 const CHARACTER_ANALYST_SYSTEM_PROMPT = `You are a literary analyst specializing in character detection and analysis. Your task is to identify and analyze characters in the provided text.
+
+CRITICAL: You MUST respond with ONLY valid JSON array - no additional text, no markdown formatting, just pure JSON array.
 
 Focus on:
 - Character names and aliases
@@ -31,9 +33,8 @@ Guidelines:
 - Use **bold** for character names in descriptions
 - Use *italic* for emphasis and literary terms
 - Format example: "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*."
-- Ensure proper JSON formatting for parsing
 
-Return format:
+Return format (ONLY this JSON array, nothing else):
 [
   {
     "name": "Character Name",
@@ -42,7 +43,9 @@ Return format:
     "description": "**John Smith** has *brown hair* and *blue eyes*. He is the *protagonist* who drives the story forward. His main motivation is *finding the truth*.",
     "type": "Human"
   }
-]`
+]
+
+DO NOT include any text before or after the JSON array. DO NOT use markdown code blocks. DO NOT add explanations. Return ONLY the JSON array.`
 
 // Error messages
 const ERROR_MESSAGES = {
@@ -62,7 +65,7 @@ function estimateTokens(text: string): number {
 }
 
 // Helper function to optimize input text
-function optimizeInputText(text: string, maxTokens: number = 1500): string {
+function optimizeInputText(text: string, maxTokens: number = 7500): string {
   const estimatedTokens = estimateTokens(text)
   
   if (estimatedTokens > maxTokens) {
@@ -130,12 +133,57 @@ function parseCharacterResponse(response: string): any[] {
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate request method
+    if (request.method !== 'POST') {
+      return NextResponse.json(
+        { error: "Method not allowed. Use POST." },
+        { status: 405 }
+      )
+    }
+
+    // Validate content type
+    const contentType = request.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      )
+    }
+
     // Parse and validate request body
-    const body = await request.json()
+    let body: any
+    try {
+      const bodyText = await request.text()
+      
+      if (!bodyText || bodyText.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Request body is empty" },
+          { status: 400 }
+        )
+      }
+      
+      body = JSON.parse(bodyText)
+    } catch (parseError) {
+      console.error("Character analysis - Request body parsing error:", parseError)
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      )
+    }
+
+    // Validate body structure
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: "Request body must be an object" },
+        { status: 400 }
+      )
+    }
+
     const { text } = body
 
     // Input validation
     if (!text || typeof text !== "string") {
+      console.error("Character analysis - Invalid text parameter:", text)
       return NextResponse.json(
         { error: ERROR_MESSAGES.INVALID_TEXT },
         { status: 400 }
@@ -143,6 +191,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (text.length < MIN_TEXT_LENGTH) {
+      console.error("Character analysis - Text too short:", text.length, "characters")
       return NextResponse.json(
         { error: ERROR_MESSAGES.TEXT_TOO_SHORT },
         { status: 400 }
@@ -152,6 +201,7 @@ export async function POST(request: NextRequest) {
     // Check if OpenAI API key is configured
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
+      console.error("Character analysis - OpenAI API key not configured")
       return NextResponse.json(
         { error: ERROR_MESSAGES.API_KEY_MISSING },
         { status: 500 }
@@ -162,6 +212,7 @@ export async function POST(request: NextRequest) {
     const optimizedText = optimizeInputText(text)
     
     // Generate character analysis using OpenAI
+    console.log("Character analysis - Calling OpenAI API...")
     const { text: response } = await generateText({
       model: openai("gpt-4o-mini"),
       system: CHARACTER_ANALYST_SYSTEM_PROMPT,
@@ -170,8 +221,12 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
+    console.log("Character analysis - OpenAI Response received")
+    console.log("Character analysis - Response length:", response?.length || 0)
+
     // Validate response
     if (!response || response.trim().length === 0) {
+      console.error("Character analysis - Empty response from OpenAI")
       return NextResponse.json(
         { error: "Generated analysis is empty. Please try again." },
         { status: 500 }
@@ -181,6 +236,7 @@ export async function POST(request: NextRequest) {
     // Parse the JSON response
     const characters = parseCharacterResponse(response)
 
+    console.log("Character analysis - Returning successful response")
     return NextResponse.json({ 
       characters,
       metadata: {

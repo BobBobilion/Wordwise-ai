@@ -1,68 +1,50 @@
 import type { GrammarSuggestion } from './types'
+import { aiSentenceChecker } from './ai-sentence-checker'
 
-let grammarChecker: any = null;
-
-// Initialize the grammar checker only on client side
+// Initialize the AI sentence checker (already a singleton)
 async function getGrammarChecker() {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  if (!grammarChecker) {
-    try {
-      const { EnhancedGrammarChecker } = await import('./enhanced-grammar-checker');
-      grammarChecker = new EnhancedGrammarChecker();
-    } catch (error) {
-      console.error('Failed to initialize grammar checker:', error);
-      return null;
+  return aiSentenceChecker;
+}
+
+export async function checkGrammar(text: string, immediate: boolean = false): Promise<GrammarSuggestion[]> {
+  console.log('📖 Grammar Checker - checkGrammar called:', { textLength: text.length, immediate })
+  try {
+    const checker = await getGrammarChecker();
+    if (!checker) {
+      console.log('❌ Grammar Checker - No checker available')
+      return [];
     }
-  }
-
-  return grammarChecker;
-}
-
-export async function checkGrammar(text: string): Promise<GrammarSuggestion[]> {
-  try {
-    const checker = await getGrammarChecker();
-    if (!checker) return [];
     
-    return await checker.checkAll(text);
+    console.log('✅ Grammar Checker - Checker available, calling checkText')
+    const result = await checker.checkText(text, immediate);
+    console.log('📋 Grammar Checker - checkText result:', result.length, 'suggestions')
+    return result;
   } catch (error) {
-    console.error('Grammar check failed:', error);
+    console.error('❌ Grammar Checker - checkGrammar failed:', error);
     return [];
   }
 }
 
+// Alias for checkGrammar to maintain backward compatibility
 export async function checkSpelling(text: string, forceCheck: boolean = false): Promise<GrammarSuggestion[]> {
-  try {
-    const checker = await getGrammarChecker();
-    if (!checker) return [];
-    
-    return await checker.checkSpelling(text, forceCheck);
-  } catch (error) {
-    console.error('Spelling check failed:', error);
-    return [];
-  }
+  return checkGrammar(text, forceCheck);
 }
 
+// Alias for checkGrammar to maintain backward compatibility  
 export async function checkStyleAndGrammar(text: string): Promise<GrammarSuggestion[]> {
-  try {
-    const checker = await getGrammarChecker();
-    if (!checker) return [];
-    
-    return await checker.checkStyleAndGrammar(text);
-  } catch (error) {
-    console.error('Style and grammar check failed:', error);
-    return [];
-  }
+  return checkGrammar(text, false);
 }
 
-export async function dismissSuggestion(suggestion: GrammarSuggestion, fullText: string): Promise<void> {
+export async function dismissSuggestion(suggestion: GrammarSuggestion): Promise<void> {
   try {
     const checker = await getGrammarChecker();
     if (!checker) return;
     
-    checker.dismissSuggestion(suggestion, fullText);
+    checker.dismissSuggestion(suggestion);
   } catch (error) {
     console.error('Failed to dismiss suggestion:', error);
   }
@@ -91,5 +73,5 @@ export async function clearDismissedSuggestions(): Promise<void> {
   }
 }
 
-// Export the class for direct use if needed
-export { EnhancedGrammarChecker } from './enhanced-grammar-checker';
+// Export the AI sentence checker for direct use if needed
+export { aiSentenceChecker, AISentenceChecker } from './ai-sentence-checker';

@@ -9,7 +9,8 @@ interface PlotSummaryProps {
 }
 
 interface PlotSummaryResponse {
-  summary: string
+  plotSummary: string[]
+  actionableInsights: string[]
   metadata?: {
     inputLength: number
     optimizedLength: number
@@ -24,15 +25,23 @@ interface PlotSummaryError {
 
 // Function to convert markdown to HTML safely
 function markdownToHtml(text: string): string {
-  return text
-    // Convert **bold** to <strong> tags
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Convert *italic* to <em> tags
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Convert `code` to <code> tags
-    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
-    // Convert line breaks to <br> tags
-    .replace(/\n/g, '<br>')
+  let result = text
+  
+  // First pass: Convert **bold** to <strong> tags
+  // Use a simple but effective approach
+  result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  
+  // Second pass: Convert *italic* to <em> tags
+  // Only match single asterisks that aren't part of HTML tags
+  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  
+  // Convert `code` to <code> tags
+  result = result.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
+  
+  // Convert line breaks to <br> tags
+  result = result.replace(/\n/g, '<br>')
+  
+  return result
 }
 
 // Function to safely render HTML content
@@ -41,7 +50,8 @@ function createMarkup(htmlContent: string) {
 }
 
 export function PlotSummary({ content }: PlotSummaryProps) {
-  const [summary, setSummary] = useState<string>("")
+  const [summary, setSummary] = useState<string[]>([])
+  const [actionableInsights, setActionableInsights] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [lastAnalyzedContent, setLastAnalyzedContent] = useState("")
@@ -61,7 +71,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
     const text = content.replace(/<[^>]*>/g, "").trim()
 
     if (!text || text.length < MIN_TEXT_LENGTH) {
-      setSummary("Write more content to generate a plot summary...")
+      setSummary([])
       setError("")
       setMetadata(null)
       return
@@ -109,11 +119,12 @@ export function PlotSummary({ content }: PlotSummaryProps) {
 
       const successData = data as PlotSummaryResponse
       
-      if (!successData.summary || successData.summary.trim().length === 0) {
-        throw new Error("Generated summary is empty. Please try again.")
+      if (!successData.plotSummary || successData.plotSummary.length === 0) {
+        throw new Error("Generated plot summary is empty. Please try again.")
       }
 
-      setSummary(successData.summary)
+      setSummary(successData.plotSummary)
+      setActionableInsights(successData.actionableInsights)
       setMetadata(successData.metadata || null)
       setLastAnalyzedContent(text)
       
@@ -127,7 +138,8 @@ export function PlotSummary({ content }: PlotSummaryProps) {
       console.error("Plot summary error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unable to generate plot summary. Please try again."
       setError(errorMessage)
-      setSummary("")
+      setSummary([])
+      setActionableInsights([])
       setMetadata(null)
     } finally {
       setLoading(false)
@@ -162,7 +174,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
   // Initial analysis when component loads with content
   useEffect(() => {
     const text = content.replace(/<[^>]*>/g, "").trim()
-    if (text.length >= MIN_TEXT_LENGTH && !summary && !loading) {
+    if (text.length >= MIN_TEXT_LENGTH && summary.length === 0 && !loading) {
       generateSummary()
     }
   }, []) // Only run once on mount
@@ -183,17 +195,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
     }
   }, [content, lastUpdateTime, lastAnalyzedContent])
 
-  const formatBulletPoints = (text: string) => {
-    // Split by bullet points and filter out empty lines
-    const points = text
-      .split(/(?:^|\n)(?:[•\-\*]\s*)/gm)
-      .filter(point => point.trim().length > 0)
-      .map(point => point.trim())
-
-    return points
-  }
-
-  const bulletPoints = summary ? formatBulletPoints(summary) : []
+  const bulletPoints = summary
 
   // Format countdown timer
   const formatCountdown = (ms: number) => {
@@ -225,7 +227,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
               </>
             )}
           </button>
-          {!loading && bulletPoints.length > 0 && (
+          {!loading && (bulletPoints.length > 0 || actionableInsights.length > 0) && (
             <span className="text-xs text-gray-500">
               Next update in {formatCountdown(timeUntilNextUpdate)}
             </span>
@@ -248,22 +250,46 @@ export function PlotSummary({ content }: PlotSummaryProps) {
             </div>
           </div>
         ) : bulletPoints.length > 0 ? (
-          <div className="space-y-3">
-            <div className="flex items-center space-x-2 mb-3">
-              <BookOpen className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">Story Overview</span>
+          <div className="space-y-6">
+            {/* Plot Summary Section */}
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2 mb-3">
+                <BookOpen className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-gray-900">Story Overview</span>
+              </div>
+              <div className="space-y-2">
+                {bulletPoints.map((point, index) => (
+                  <div key={index} className="flex items-start space-x-2">
+                    <span className="text-blue-600 font-bold mt-0.5">•</span>
+                    <div 
+                      className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={createMarkup(markdownToHtml(point))}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-2">
-              {bulletPoints.map((point, index) => (
-                <div key={index} className="flex items-start space-x-2">
-                  <span className="text-blue-600 font-bold mt-0.5">•</span>
-                  <div 
-                    className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={createMarkup(markdownToHtml(point))}
-                  />
+
+            {/* Actionable Insights Section */}
+            {actionableInsights.length > 0 && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Info className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-gray-900">Writing Insights</span>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-2">
+                  {actionableInsights.map((insight, index) => (
+                    <div key={index} className="flex items-start space-x-2">
+                      <span className="text-green-600 font-bold mt-0.5">→</span>
+                      <div 
+                        className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={createMarkup(markdownToHtml(insight))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8">
@@ -298,7 +324,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
         </div>
       )}
 
-      {bulletPoints.length > 0 && !loading && !error && (
+      {(bulletPoints.length > 0 || actionableInsights.length > 0) && !loading && !error && (
         <div className="text-xs text-gray-500 text-center">
           Summary generated by AI • Updates every 5 minutes or on manual refresh
         </div>
