@@ -348,7 +348,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           const foundIndex = searchContent.indexOf(oldText)
           
           if (foundIndex !== -1) {
-            const actualStart = searchStart + foundIndex + 1 // Shift right by 1 character
+            const actualStart = searchStart + foundIndex + 2 // Shift right by 1 character
             const actualEnd = actualStart + oldText.length
             
             // Store current cursor position
@@ -376,7 +376,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           return { success: false }
         }
         
-        const actualStart = fullFoundIndex + 1 // Shift right by 1 character
+        const actualStart = fullFoundIndex + 2 // Shift right by 1 character
         const actualEnd = actualStart + oldText.length
         
         // Store current cursor position
@@ -709,19 +709,28 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         {/* Highlight Styles */}
         <style jsx global>{`
           .highlight-red {
-            background-color: rgba(239, 68, 68, 0.3);
             border-bottom: 2px solid #ef4444;
             cursor: pointer;
+            transition: background-color 0.2s ease;
+          }
+          .highlight-red:hover {
+            background-color: rgba(239, 68, 68, 0.3);
           }
           .highlight-yellow {
-            background-color: rgba(234, 179, 8, 0.3);
             border-bottom: 2px solid #eab308;
             cursor: pointer;
+            transition: background-color 0.2s ease;
+          }
+          .highlight-yellow:hover {
+            background-color: rgba(234, 179, 8, 0.3);
           }
           .highlight-purple {
-            background-color: rgba(147, 51, 234, 0.3);
             border-bottom: 2px solid #9333ea;
             cursor: pointer;
+            transition: background-color 0.2s ease;
+          }
+          .highlight-purple:hover {
+            background-color: rgba(147, 51, 234, 0.3);
           }
           .ProseMirror {
             outline: none;

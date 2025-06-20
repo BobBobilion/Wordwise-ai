@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { text: aiResponse } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model: openai("gpt-4o-nano"),
       system: `You are a spelling assistant. Analyze the provided text and identify spelling errors only.
 
 For each spelling error found, respond in this exact JSON format:
