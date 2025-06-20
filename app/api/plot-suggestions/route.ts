@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { plotPoints } = body
+    const { plotPoints, selectedSuggestions, existingSuggestions } = body
 
     // Input validation
     if (!plotPoints || !Array.isArray(plotPoints)) {
@@ -151,76 +151,166 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Prepare plot points for the prompt
-    const plotPointsText = plotPoints.map((point, index) => 
-      `${index + 1}. ${point.point}`
-    ).join('\n')
+    // Determine if this is a partial regeneration
+    const isPartialRegeneration = selectedSuggestions && Array.isArray(selectedSuggestions) && existingSuggestions && Array.isArray(existingSuggestions)
     
-    // Generate plot suggestions using OpenAI
-    const { text: responseText } = await generateText({
-      model: openai("gpt-4o-mini"),
-      system: PLOT_SUGGESTIONS_SYSTEM_PROMPT,
-      prompt: `Based on these plot points, generate 3 immediate plot continuation suggestions:\n\n${plotPointsText}`,
-      maxTokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-    })
+    let finalSuggestions: string[] = []
+    let newSuggestionsCount = 3
 
-    // Validate response
-    if (!responseText || responseText.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Generated response is empty. Please try again." },
-        { status: 500 }
-      )
-    }
-
-    // Parse JSON response
-    let parsedResponse: { suggestions: string[] }
-    try {
-      // Clean the response text to ensure it's valid JSON
-      const cleanedText = responseText.trim()
-      
-      // Remove any markdown code blocks if present
-      const jsonText = cleanedText.replace(/```json\s*|\s*```/g, '')
-      
-      parsedResponse = JSON.parse(jsonText)
-      
-      // Validate the parsed structure
-      if (!parsedResponse.suggestions) {
-        throw new Error("Invalid response structure - missing suggestions")
-      }
-      
-      if (!Array.isArray(parsedResponse.suggestions)) {
-        throw new Error("Invalid response structure - suggestions must be an array")
+    if (isPartialRegeneration) {
+      // Validate selected suggestions
+      if (selectedSuggestions.length >= 3) {
+        return NextResponse.json(
+          { error: "Cannot regenerate when all suggestions are selected" },
+          { status: 400 }
+        )
       }
 
-      // Validate array contents
-      if (parsedResponse.suggestions.length === 0) {
-        throw new Error("Response contains empty suggestions array")
+      // Validate existing suggestions
+      if (existingSuggestions.length !== 3) {
+        return NextResponse.json(
+          { error: "Invalid existing suggestions array" },
+          { status: 400 }
+        )
       }
 
-      if (parsedResponse.suggestions.length !== 3) {
-        throw new Error("Response must contain exactly 3 suggestions")
-      }
+      // Create final suggestions array with selected ones in their positions
+      finalSuggestions = [...existingSuggestions]
+      newSuggestionsCount = 3 - selectedSuggestions.length
 
-      // Validate suggestion structure
-      for (const suggestion of parsedResponse.suggestions) {
-        if (!suggestion || typeof suggestion !== 'string') {
-          throw new Error("Invalid suggestion - must be a non-empty string")
+      // Mark positions that need new suggestions
+      const positionsToRegenerate: number[] = []
+      for (let i = 0; i < 3; i++) {
+        if (!selectedSuggestions.includes(i)) {
+          positionsToRegenerate.push(i)
         }
       }
 
-    } catch (parseError) {
-      return NextResponse.json(
-        { error: "Failed to parse AI response. Please try again." },
-        { status: 500 }
-      )
+      // Prepare context for AI including selected suggestions
+      const selectedSuggestionsText = selectedSuggestions
+        .map(index => `${index + 1}. ${existingSuggestions[index]}`)
+        .join('\n')
+
+      // Prepare plot points for the prompt
+      const plotPointsText = plotPoints.map((point, index) => 
+        `${index + 1}. ${point.point}`
+      ).join('\n')
+      
+      // Generate new suggestions using OpenAI
+      const { text: responseText } = await generateText({
+        model: openai("gpt-4o-mini"),
+        system: PLOT_SUGGESTIONS_SYSTEM_PROMPT,
+        prompt: `Based on these plot points, generate ${newSuggestionsCount} immediate plot continuation suggestions that are similar in style, tone, and quality to the selected suggestions below. The new suggestions should match the writing style and narrative approach of the selected ones while providing fresh plot directions.\n\nPlot Points:\n${plotPointsText}\n\nSelected Suggestions (generate similar to these):\n${selectedSuggestionsText}\n\nGenerate ${newSuggestionsCount} new suggestions that are similar in style and quality to the selected ones above:`,
+        maxTokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+      })
+
+      // Validate response
+      if (!responseText || responseText.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Generated response is empty. Please try again." },
+          { status: 500 }
+        )
+      }
+
+      // Parse JSON response
+      let parsedResponse: { suggestions: string[] }
+      try {
+        const cleanedText = responseText.trim()
+        const jsonText = cleanedText.replace(/```json\s*|\s*```/g, '')
+        parsedResponse = JSON.parse(jsonText)
+        
+        if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
+          throw new Error("Invalid response structure")
+        }
+
+        if (parsedResponse.suggestions.length !== newSuggestionsCount) {
+          throw new Error(`Expected ${newSuggestionsCount} suggestions, got ${parsedResponse.suggestions.length}`)
+        }
+
+        // Validate suggestion structure
+        for (const suggestion of parsedResponse.suggestions) {
+          if (!suggestion || typeof suggestion !== 'string') {
+            throw new Error("Invalid suggestion - must be a non-empty string")
+          }
+        }
+
+        // Insert new suggestions into their correct positions
+        let newSuggestionIndex = 0
+        for (const position of positionsToRegenerate) {
+          finalSuggestions[position] = parsedResponse.suggestions[newSuggestionIndex]
+          newSuggestionIndex++
+        }
+
+      } catch (parseError) {
+        return NextResponse.json(
+          { error: "Failed to parse AI response. Please try again." },
+          { status: 500 }
+        )
+      }
+
+    } else {
+      // Full regeneration - original logic
+      const plotPointsText = plotPoints.map((point, index) => 
+        `${index + 1}. ${point.point}`
+      ).join('\n')
+      
+      const { text: responseText } = await generateText({
+        model: openai("gpt-4o-mini"),
+        system: PLOT_SUGGESTIONS_SYSTEM_PROMPT,
+        prompt: `Based on these plot points, generate 3 immediate plot continuation suggestions:\n\n${plotPointsText}`,
+        maxTokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+      })
+
+      if (!responseText || responseText.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Generated response is empty. Please try again." },
+          { status: 500 }
+        )
+      }
+
+      let parsedResponse: { suggestions: string[] }
+      try {
+        const cleanedText = responseText.trim()
+        const jsonText = cleanedText.replace(/```json\s*|\s*```/g, '')
+        parsedResponse = JSON.parse(jsonText)
+        
+        if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
+          throw new Error("Invalid response structure - missing suggestions")
+        }
+
+        if (parsedResponse.suggestions.length === 0) {
+          throw new Error("Response contains empty suggestions array")
+        }
+
+        if (parsedResponse.suggestions.length !== 3) {
+          throw new Error("Response must contain exactly 3 suggestions")
+        }
+
+        for (const suggestion of parsedResponse.suggestions) {
+          if (!suggestion || typeof suggestion !== 'string') {
+            throw new Error("Invalid suggestion - must be a non-empty string")
+          }
+        }
+
+        finalSuggestions = parsedResponse.suggestions
+
+      } catch (parseError) {
+        return NextResponse.json(
+          { error: "Failed to parse AI response. Please try again." },
+          { status: 500 }
+        )
+      }
     }
 
     return NextResponse.json({ 
-      suggestions: parsedResponse.suggestions,
+      suggestions: finalSuggestions,
       metadata: {
         inputPlotPoints: plotPoints.length,
-        model: "gpt-4o-mini"
+        model: "gpt-4o-mini",
+        isPartialRegeneration: isPartialRegeneration,
+        preservedCount: isPartialRegeneration ? selectedSuggestions.length : 0
       }
     })
 

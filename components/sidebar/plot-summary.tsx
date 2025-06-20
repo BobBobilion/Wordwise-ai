@@ -154,15 +154,26 @@ export function PlotSummary({ content }: PlotSummaryProps) {
     setSuggestionsLoading(true)
     setSuggestionsError("")
     setSuggestionsMetadata(null)
-    setSelectedSuggestions(new Set())
     
     try {
+      // Determine if this is a partial regeneration
+      const selectedIndices = Array.from(selectedSuggestions)
+      const isPartialRegeneration = suggestions.length > 0 && selectedIndices.length > 0 && selectedIndices.length < 3
+      
+      const requestBody = isPartialRegeneration 
+        ? { 
+            plotPoints: summary, 
+            selectedSuggestions: selectedIndices,
+            existingSuggestions: suggestions
+          }
+        : { plotPoints: summary }
+
       const response = await fetch("/api/plot-suggestions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ plotPoints: summary }),
+        body: JSON.stringify(requestBody),
       })
 
       const data: PlotSuggestionsResponse | PlotSuggestionsError = await response.json()
@@ -180,6 +191,15 @@ export function PlotSummary({ content }: PlotSummaryProps) {
 
       setSuggestions(successData.suggestions)
       setSuggestionsMetadata(successData.metadata || null)
+      
+      // For partial regeneration, keep the selected suggestions selected
+      if (isPartialRegeneration) {
+        // The selected suggestions should remain selected since they're preserved
+        // No need to modify selectedSuggestions state
+      } else {
+        // For full regeneration, clear all selections
+        setSelectedSuggestions(new Set())
+      }
     } catch (error) {
       console.error("Plot suggestions error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unable to generate plot suggestions. Please try again."
@@ -329,7 +349,10 @@ export function PlotSummary({ content }: PlotSummaryProps) {
                   ) : suggestions.length > 0 ? (
                     <>
                       <RefreshCw className="h-3 w-3 mr-1" />
-                      Regenerate
+                      {selectedSuggestions.size > 0 && selectedSuggestions.size < 3 
+                        ? `Regenerate ${3 - selectedSuggestions.size}`
+                        : 'Regenerate All'
+                      }
                     </>
                   ) : (
                     <>
