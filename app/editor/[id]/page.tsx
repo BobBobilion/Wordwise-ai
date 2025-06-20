@@ -242,9 +242,6 @@ export default function EditorPage() {
     setGrammarSuggestions(prev => prev.filter(s => 
       !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
     ))
-    
-    // Show success toast
-    toast.success(`Applied correction: "${suggestion.text}" → "${suggestion.suggestion}"`)
   }
 
   const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {

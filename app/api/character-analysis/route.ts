@@ -98,41 +98,27 @@ function handleOpenAIError(error: any): { status: number; message: string } {
 
 // Helper function to parse and validate JSON response
 function parseCharacterResponse(response: string): any[] {
-  console.log("🔍 PARSING DEBUG - Raw response:", response)
-  
   try {
     // Clean the response to ensure it's valid JSON
     const cleanedResponse = response.trim()
-    console.log("🔍 PARSING DEBUG - Cleaned response:", cleanedResponse)
     
     const jsonStart = cleanedResponse.indexOf('[')
     const jsonEnd = cleanedResponse.lastIndexOf(']') + 1
     
-    console.log("🔍 PARSING DEBUG - JSON start:", jsonStart, "JSON end:", jsonEnd)
-    
     if (jsonStart === -1 || jsonEnd === 0) {
-      console.log("🔍 PARSING DEBUG - No JSON array found")
       throw new Error("Invalid JSON format")
     }
     
     const jsonString = cleanedResponse.substring(jsonStart, jsonEnd)
-    console.log("🔍 PARSING DEBUG - Extracted JSON string:", jsonString)
-    
     const characters = JSON.parse(jsonString)
-    console.log("🔍 PARSING DEBUG - Parsed characters:", characters)
     
     // Validate that it's an array
     if (!Array.isArray(characters)) {
-      console.log("🔍 PARSING DEBUG - Response is not an array")
       throw new Error("Response is not an array")
     }
     
-    console.log("🔍 PARSING DEBUG - Array length:", characters.length)
-    
     // Validate each character object with more lenient validation
-    const validCharacters = characters.filter((char, index) => {
-      console.log(`🔍 PARSING DEBUG - Validating character ${index}:`, char)
-      
+    const validCharacters = characters.filter((char) => {
       const isValid = char && 
         typeof char.name === 'string' && 
         typeof char.role === 'string' &&
@@ -144,29 +130,21 @@ function parseCharacterResponse(response: string): any[] {
                               typeof char.mentions === 'string' ||
                               char.mentions === undefined
       
-      console.log(`🔍 PARSING DEBUG - Character ${index} valid:`, isValid && hasValidMentions)
-      
       return isValid && hasValidMentions
     })
     
-    console.log("🔍 PARSING DEBUG - Valid characters count:", validCharacters.length)
     return validCharacters
     
   } catch (error: any) {
-    console.log("🔍 PARSING DEBUG - Error occurred:", error)
-    console.log("🔍 PARSING DEBUG - Error message:", error.message)
+    console.error("Error parsing character response:", error)
     return []
   }
 }
 
 export async function POST(request: NextRequest) {
-  console.log("=== CHARACTER ANALYSIS API CALLED ===")
-  console.log(`Timestamp: ${new Date().toISOString()}`)
-  
   try {
     // Validate request method
     if (request.method !== 'POST') {
-      console.log("❌ Method not allowed:", request.method)
       return NextResponse.json(
         { error: "Method not allowed. Use POST." },
         { status: 405 }
@@ -176,7 +154,6 @@ export async function POST(request: NextRequest) {
     // Validate content type
     const contentType = request.headers.get('content-type')
     if (!contentType || !contentType.includes('application/json')) {
-      console.log("❌ Invalid content type:", contentType)
       return NextResponse.json(
         { error: "Content-Type must be application/json" },
         { status: 400 }
@@ -189,7 +166,6 @@ export async function POST(request: NextRequest) {
       const bodyText = await request.text()
       
       if (!bodyText || bodyText.trim().length === 0) {
-        console.log("❌ Empty request body")
         return NextResponse.json(
           { error: "Request body is empty" },
           { status: 400 }
@@ -198,7 +174,6 @@ export async function POST(request: NextRequest) {
       
       body = JSON.parse(bodyText)
     } catch (parseError) {
-      console.log("❌ JSON parse error:", parseError)
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
         { status: 400 }
@@ -207,7 +182,6 @@ export async function POST(request: NextRequest) {
 
     // Validate body structure
     if (!body || typeof body !== 'object') {
-      console.log("❌ Invalid body structure:", typeof body)
       return NextResponse.json(
         { error: "Request body must be an object" },
         { status: 400 }
@@ -218,7 +192,6 @@ export async function POST(request: NextRequest) {
 
     // Input validation
     if (!text || typeof text !== "string") {
-      console.log("❌ Invalid text input:", typeof text)
       return NextResponse.json(
         { error: ERROR_MESSAGES.INVALID_TEXT },
         { status: 400 }
@@ -226,23 +199,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (text.length < MIN_TEXT_LENGTH) {
-      console.log(`❌ Text too short: ${text.length} chars (min: ${MIN_TEXT_LENGTH})`)
       return NextResponse.json(
         { error: ERROR_MESSAGES.TEXT_TOO_SHORT },
         { status: 400 }
       )
     }
 
-    // Log input text
-    console.log("📝 INPUT TEXT:")
-    console.log("Length:", text.length, "characters")
-    console.log("Preview:", text.substring(0, 200) + (text.length > 200 ? "..." : ""))
-    console.log("Full text:", text)
-
     // Check if OpenAI API key is configured
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
-      console.log("❌ OpenAI API key missing")
       return NextResponse.json(
         { error: ERROR_MESSAGES.API_KEY_MISSING },
         { status: 500 }
@@ -251,12 +216,8 @@ export async function POST(request: NextRequest) {
 
     // Optimize input text to prevent token limit issues
     const optimizedText = optimizeInputText(text)
-    console.log("🔧 OPTIMIZED TEXT:")
-    console.log("Length:", optimizedText.length, "characters")
-    console.log("Estimated tokens:", estimateTokens(optimizedText))
     
     // Generate character analysis using OpenAI
-    console.log("🤖 CALLING OPENAI API...")
     const { text: response } = await generateText({
       model: openai("gpt-4o-mini"),
       system: CHARACTER_ANALYST_SYSTEM_PROMPT,
@@ -265,14 +226,8 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
-    // Log raw AI response
-    console.log("🤖 RAW AI RESPONSE:")
-    console.log("Length:", response?.length || 0, "characters")
-    console.log("Response:", response)
-
     // Validate response
     if (!response || response.trim().length === 0) {
-      console.log("❌ Empty AI response")
       return NextResponse.json(
         { error: "Generated analysis is empty. Please try again." },
         { status: 500 }
@@ -280,12 +235,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the JSON response
-    console.log("🔍 PARSING JSON RESPONSE...")
     const characters = parseCharacterResponse(response)
-    
-    console.log("✅ PARSED CHARACTERS:")
-    console.log("Count:", characters.length)
-    console.log("Characters:", JSON.stringify(characters, null, 2))
 
     const finalResponse = { 
       characters,
@@ -297,27 +247,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log("📤 FINAL API RESPONSE:")
-    console.log(JSON.stringify(finalResponse, null, 2))
-    console.log("=== CHARACTER ANALYSIS COMPLETED ===\n")
-
     return NextResponse.json(finalResponse)
 
   } catch (error: any) {
-    console.log("❌ ERROR OCCURRED:")
-    console.log("Error type:", error.constructor.name)
-    console.log("Error message:", error.message)
-    console.log("Error stack:", error.stack)
+    console.error("Character analysis error:", error)
     
     // Handle specific OpenAI API errors
     if (error.name === 'OpenAIError' || error.status) {
       const { status, message } = handleOpenAIError(error)
-      console.log(`❌ OpenAI API Error (${status}):`, message)
       return NextResponse.json({ error: message }, { status })
     }
 
     // Handle general errors
-    console.log("❌ General API Error:", ERROR_MESSAGES.API_ERROR)
     return NextResponse.json(
       { error: ERROR_MESSAGES.API_ERROR },
       { status: 500 }
