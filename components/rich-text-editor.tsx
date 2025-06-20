@@ -19,7 +19,10 @@ import {
   AlignJustify,
   Type,
   Undo,
-  Redo
+  Redo,
+  CheckCircle,
+  Loader2,
+  RotateCw
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -42,6 +45,8 @@ interface RichTextEditorProps {
   onTitleChange: (title: string) => void
   highlights?: HighlightMark[]
   onHighlightClick?: (highlight: HighlightMark) => void
+  onSpellCheck?: () => void
+  isCheckingGrammar?: boolean
 }
 
 export interface RichTextEditorRef {
@@ -131,7 +136,7 @@ const FONT_FAMILIES = [
 ]
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick }, ref) => {
+  ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick, onSpellCheck, isCheckingGrammar }, ref) => {
     const [currentHighlights, setCurrentHighlights] = useState<HighlightMark[]>(highlights)
     const [cursorPosition, setCursorPosition] = useState<number>(0)
     const editorRef = useRef<HTMLDivElement>(null)
@@ -336,7 +341,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 p-3 bg-gray-50 rounded-lg border">
           {/* Text Formatting */}
           <div className="flex items-center gap-1">
             <Button
@@ -469,6 +474,27 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
               title="Redo (Ctrl+U)"
             >
               <Redo className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="w-px h-6 bg-gray-300" />
+
+          {/* Spell Check */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSpellCheck}
+              disabled={isCheckingGrammar}
+              className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700"
+              title="Check Spelling & Grammar"
+            >
+              {isCheckingGrammar ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <RotateCw className="h-4 w-4 mr-1" />
+              )}
+              Check
             </Button>
           </div>
         </div>

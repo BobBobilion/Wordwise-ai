@@ -195,6 +195,12 @@ export default function EditorPage() {
     }
   }
 
+  const handleManualSpellCheck = () => {
+    if (document?.content && !isCheckingGrammar) {
+      checkGrammar(document.content)
+    }
+  }
+
   // Keyboard shortcut handler for Ctrl+S
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -337,6 +343,8 @@ export default function EditorPage() {
                   onTitleChange={handleTitleChange}
                   highlights={highlights}
                   onHighlightClick={handleHighlightClick}
+                  onSpellCheck={handleManualSpellCheck}
+                  isCheckingGrammar={isCheckingGrammar}
                   ref={editorRef}
                 />
               </div>
