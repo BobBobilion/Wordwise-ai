@@ -15,6 +15,7 @@ interface WritingSidebarProps {
   activeTab?: 'overview' | 'suggestions' | 'characters' | 'plot'
   onTabChange?: (tab: 'overview' | 'suggestions' | 'characters' | 'plot') => void
   highlightedSuggestionId?: string
+  onCharacterNameChange?: (oldName: string, newName: string) => void
 }
 
 type TabType = "overview" | "suggestions" | "characters" | "plot"
@@ -33,7 +34,8 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     onDismissSuggestion = () => {},
     activeTab,
     onTabChange,
-    highlightedSuggestionId
+    highlightedSuggestionId,
+    onCharacterNameChange
   }, ref) => {
     const [internalActiveTab, setInternalActiveTab] = useState<TabType>("overview")
     
@@ -141,7 +143,7 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
             ref={charactersRef}
             className={`${currentActiveTab === "characters" ? "block" : "hidden"} h-full`}
           >
-            <CharacterNotebook content={content} />
+            <CharacterNotebook content={content} onCharacterNameChange={onCharacterNameChange} />
           </div>
           
           <div 

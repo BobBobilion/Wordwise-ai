@@ -331,6 +331,92 @@ export default function EditorPage() {
     }
   }
 
+  const generateNameVariations = (fullName: string) => {
+    const variations: Array<{text: string, type: 'first' | 'last' | 'full'}> = []
+    const nameParts = fullName.trim().split(/\s+/)
+    
+    if (nameParts.length === 0) return variations
+    
+    // Always add full name
+    variations.push({ text: fullName, type: 'full' })
+    
+    if (nameParts.length === 1) {
+      // Single name - treat as both first and last name
+      variations.push({ text: nameParts[0], type: 'first' })
+      variations.push({ text: nameParts[0], type: 'last' })
+    } else {
+      // Multiple names
+      // First name: everything except the last term
+      const firstName = nameParts.slice(0, -1).join(' ')
+      variations.push({ text: firstName, type: 'first' })
+      
+      // Last name: only the last term
+      const lastName = nameParts[nameParts.length - 1]
+      variations.push({ text: lastName, type: 'last' })
+    }
+    
+    return variations
+  }
+
+  const handleCharacterNameChange = async (oldName: string, newName: string) => {
+    if (!document || !editorRef.current) return
+
+    // Get the current content from the editor
+    const currentContent = editorRef.current.getContent()
+    
+    // Create a temporary div to parse HTML content
+    const tempDiv = window.document.createElement('div')
+    tempDiv.innerHTML = currentContent
+    
+    // Get the text content for replacement
+    const textContent = tempDiv.textContent || tempDiv.innerText || ''
+    
+    // Generate name variations for comprehensive replacement
+    const oldVariations = generateNameVariations(oldName)
+    const newVariations = generateNameVariations(newName)
+    let newTextContent = textContent
+    
+    // Create a map of old variation types to new names
+    const replacementMap = new Map<string, string>()
+    
+    // Map each type to the appropriate new name
+    oldVariations.forEach(oldVar => {
+      if (oldVar.type === 'full') {
+        replacementMap.set(oldVar.text, newName)
+      } else if (oldVar.type === 'first') {
+        // Find the new first name
+        const newFirstName = newVariations.find(v => v.type === 'first')
+        replacementMap.set(oldVar.text, newFirstName?.text || newName)
+      } else if (oldVar.type === 'last') {
+        // Find the new last name
+        const newLastName = newVariations.find(v => v.type === 'last')
+        replacementMap.set(oldVar.text, newLastName?.text || newName)
+      }
+    })
+    
+    // Perform replacements
+    replacementMap.forEach((newText, oldText) => {
+      const regex = new RegExp(`\\b${escapeRegExp(oldText)}\\b`, 'gi')
+      newTextContent = newTextContent.replace(regex, newText)
+    })
+    
+    // Update the HTML content by replacing the text content
+    const newHtmlContent = currentContent.replace(textContent, newTextContent)
+    
+    // Update the document content
+    setDocument({ ...document, content: newHtmlContent })
+    
+    // Update the editor content
+    editorRef.current.setContent(newHtmlContent)
+    
+    // Save the document
+    await saveDocument()
+  }
+
+  const escapeRegExp = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+
   const handleBackToDashboard = async () => {
     // Save before leaving if there are unsaved changes
     if (document && !saving) {
@@ -447,6 +533,7 @@ export default function EditorPage() {
             activeTab={activeSidebarTab}
             onTabChange={setActiveSidebarTab}
             highlightedSuggestionId={highlightedSuggestionId}
+            onCharacterNameChange={handleCharacterNameChange}
           />
         </main>
 

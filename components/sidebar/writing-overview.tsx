@@ -19,7 +19,6 @@ export function WritingOverview({ content }: WritingOverviewProps) {
     genre: "General Fiction"
   })
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [lastAnalyzedLength, setLastAnalyzedLength] = useState(0)
 
   const basicAnalysis = useMemo(() => {
     const text = content.replace(/<[^>]*>/g, "").trim()
@@ -57,7 +56,6 @@ export function WritingOverview({ content }: WritingOverviewProps) {
       if (response.ok) {
         const result = await response.json()
         setAiAnalysis(result)
-        setLastAnalyzedLength(text.length)
       }
     } catch (error) {
       console.error("Failed to analyze writing:", error)
@@ -66,22 +64,10 @@ export function WritingOverview({ content }: WritingOverviewProps) {
     }
   }, [content])
 
-  // Auto-analyze every 250 characters
-  useEffect(() => {
-    const text = content.replace(/<[^>]*>/g, "").trim()
-    const characterDifference = Math.abs(text.length - lastAnalyzedLength)
-    
-    if (characterDifference >= 250 && text.length > 0) {
-      analyzeWithAI()
-    }
-  }, [content, lastAnalyzedLength, analyzeWithAI])
-
-  // Initial analysis
-  useEffect(() => {
-    if (lastAnalyzedLength === 0 && content.replace(/<[^>]*>/g, "").trim().length > 0) {
-      analyzeWithAI()
-    }
-  }, [content, lastAnalyzedLength, analyzeWithAI])
+  // Handle manual analysis
+  const handleManualAnalysis = () => {
+    analyzeWithAI()
+  }
 
   const getMoodColor = (mood: string) => {
     const colors: Record<string, string> = {
@@ -130,7 +116,7 @@ export function WritingOverview({ content }: WritingOverviewProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={analyzeWithAI}
+            onClick={handleManualAnalysis}
             disabled={isAnalyzing}
             className="h-6 w-6 p-0"
           >

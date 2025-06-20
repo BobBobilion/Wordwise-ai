@@ -54,20 +54,12 @@ export function PlotSummary({ content }: PlotSummaryProps) {
   const [actionableInsights, setActionableInsights] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
-  const [lastAnalyzedContent, setLastAnalyzedContent] = useState("")
   const [metadata, setMetadata] = useState<PlotSummaryResponse['metadata'] | null>(null)
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0)
-  const [timeUntilNextUpdate, setTimeUntilNextUpdate] = useState<number>(0)
-  
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const lastContentRef = useRef<string>("")
 
   // Constants
-  const UPDATE_INTERVAL = 300000 // 5 minutes in milliseconds
   const MIN_TEXT_LENGTH = 100
-  const CONTENT_CHANGE_THRESHOLD = 20 // Only reset countdown if content changes by more than 20 characters
 
-  const generateSummary = async (forceUpdate: boolean = false) => {
+  const generateSummary = async () => {
     const text = content.replace(/<[^>]*>/g, "").trim()
 
     if (!text || text.length < MIN_TEXT_LENGTH) {
@@ -75,25 +67,6 @@ export function PlotSummary({ content }: PlotSummaryProps) {
       setError("")
       setMetadata(null)
       return
-    }
-
-    // Check if we should update
-    const now = Date.now()
-    const timeSinceLastUpdate = now - lastUpdateTime
-    
-    // Calculate character difference from last analyzed content
-    const characterDifference = Math.abs(text.length - lastAnalyzedContent.length)
-    const contentChanged = text !== lastAnalyzedContent
-    
-    if (!forceUpdate && !contentChanged) {
-      return // Don't update if content hasn't changed
-    }
-
-    // Only reset countdown if content changed significantly or if forced update
-    const shouldResetCountdown = forceUpdate || characterDifference > CONTENT_CHANGE_THRESHOLD
-    
-    if (!forceUpdate && timeSinceLastUpdate < UPDATE_INTERVAL && !shouldResetCountdown) {
-      return // Don't update if not enough time has passed and change is minor
     }
 
     setLoading(true)
@@ -126,14 +99,6 @@ export function PlotSummary({ content }: PlotSummaryProps) {
       setSummary(successData.plotSummary)
       setActionableInsights(successData.actionableInsights)
       setMetadata(successData.metadata || null)
-      setLastAnalyzedContent(text)
-      
-      // Only update last update time if we're resetting the countdown
-      if (shouldResetCountdown) {
-        setLastUpdateTime(now)
-      }
-      
-      lastContentRef.current = text
     } catch (error) {
       console.error("Plot summary error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unable to generate plot summary. Please try again."
@@ -148,62 +113,10 @@ export function PlotSummary({ content }: PlotSummaryProps) {
 
   // Handle manual refresh
   const handleManualRefresh = () => {
-    generateSummary(true)
+    generateSummary()
   }
-
-  // Update countdown timer
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = Date.now()
-      const timeSinceLastUpdate = now - lastUpdateTime
-      const remaining = Math.max(0, UPDATE_INTERVAL - timeSinceLastUpdate)
-      setTimeUntilNextUpdate(remaining)
-    }
-
-    // Update countdown every second
-    intervalRef.current = setInterval(updateCountdown, 1000)
-    updateCountdown() // Initial update
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [lastUpdateTime])
-
-  // Initial analysis when component loads with content
-  useEffect(() => {
-    const text = content.replace(/<[^>]*>/g, "").trim()
-    if (text.length >= MIN_TEXT_LENGTH && summary.length === 0 && !loading) {
-      generateSummary()
-    }
-  }, []) // Only run once on mount
-
-  // Check for content changes and auto-update every 5 minutes
-  useEffect(() => {
-    const text = content.replace(/<[^>]*>/g, "").trim()
-    
-    // Only run analysis if we have enough content and haven't analyzed this content before
-    if (text.length >= MIN_TEXT_LENGTH && text !== lastAnalyzedContent) {
-      const now = Date.now()
-      const timeSinceLastUpdate = now - lastUpdateTime
-      
-      // Only auto-update if 5 minutes have passed since last update
-      if (timeSinceLastUpdate >= UPDATE_INTERVAL) {
-        generateSummary()
-      }
-    }
-  }, [content, lastUpdateTime, lastAnalyzedContent])
 
   const bulletPoints = summary
-
-  // Format countdown timer
-  const formatCountdown = (ms: number) => {
-    const seconds = Math.ceil(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-  }
 
   return (
     <div className="p-4 space-y-4">
@@ -227,11 +140,6 @@ export function PlotSummary({ content }: PlotSummaryProps) {
               </>
             )}
           </button>
-          {!loading && (bulletPoints.length > 0 || actionableInsights.length > 0) && (
-            <span className="text-xs text-gray-500">
-              Next update in {formatCountdown(timeUntilNextUpdate)}
-            </span>
-          )}
         </div>
       </div>
 
@@ -326,7 +234,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
 
       {(bulletPoints.length > 0 || actionableInsights.length > 0) && !loading && !error && (
         <div className="text-xs text-gray-500 text-center">
-          Summary generated by AI • Updates every 5 minutes or on manual refresh
+          Summary generated by AI • Manual refresh only
         </div>
       )}
     </div>

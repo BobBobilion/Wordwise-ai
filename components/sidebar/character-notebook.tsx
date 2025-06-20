@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { User, Users, Loader2, RefreshCw, AlertCircle, Info, Image, Download, Dog, Cat, Sparkles, Zap, Rocket, Ghost, Crown, Sword, Shield, Heart, Star, Moon, Sun, Cloud, Trees, Flower, Bug, Fish, Bird } from "lucide-react"
+import { User, Users, Loader2, RefreshCw, AlertCircle, Info, Image, Download, Dog, Cat, Sparkles, Zap, Rocket, Ghost, Crown, Sword, Shield, Heart, Star, Moon, Sun, Cloud, Trees, Flower, Bug, Fish, Bird, Edit3, X, AlertTriangle } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 
 interface CharacterNotebookProps {
   content: string
+  onCharacterNameChange?: (oldName: string, newName: string) => void
 }
 
 interface Character {
@@ -139,14 +140,11 @@ function getCharacterIcon(characterType: string) {
   }
 }
 
-export function CharacterNotebook({ content }: CharacterNotebookProps) {
+export function CharacterNotebook({ content, onCharacterNameChange }: CharacterNotebookProps) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
-  const [lastAnalyzedContent, setLastAnalyzedContent] = useState("")
   const [metadata, setMetadata] = useState<CharacterAnalysisResponse['metadata'] | null>(null)
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0)
-  const [timeUntilNextUpdate, setTimeUntilNextUpdate] = useState<number>(0)
   
   // Image generation states
   const [generatingImages, setGeneratingImages] = useState<Record<string, boolean>>({})
@@ -156,15 +154,18 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
   // Full picture mode state
   const [expandedImage, setExpandedImage] = useState<{url: string, characterName: string} | null>(null)
   
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const lastContentRef = useRef<string>("")
+  // Character name editing states
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
+  const [newCharacterName, setNewCharacterName] = useState("")
+  const [showNameChangeModal, setShowNameChangeModal] = useState(false)
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false)
+  const [nameChangePreview, setNameChangePreview] = useState<{oldName: string, newName: string, replacements: number, preview: string, descriptionPreview: string} | null>(null)
+  const [isProcessingNameChange, setIsProcessingNameChange] = useState(false)
 
   // Constants
-  const UPDATE_INTERVAL = 300000 // 5 minutes in milliseconds
   const MIN_TEXT_LENGTH = 50
-  const CONTENT_CHANGE_THRESHOLD = 20 // Only reset countdown if content changes by more than 20 characters
 
-  const analyzeCharacters = async (forceUpdate: boolean = false) => {
+  const analyzeCharacters = async () => {
     const text = content.replace(/<[^>]*>/g, "").trim()
 
     if (!text || text.length < MIN_TEXT_LENGTH) {
@@ -172,25 +173,6 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
       setError("")
       setMetadata(null)
       return
-    }
-
-    // Check if we should update
-    const now = Date.now()
-    const timeSinceLastUpdate = now - lastUpdateTime
-    
-    // Calculate character difference from last analyzed content
-    const characterDifference = Math.abs(text.length - lastAnalyzedContent.length)
-    const contentChanged = text !== lastAnalyzedContent
-    
-    if (!forceUpdate && !contentChanged) {
-      return // Don't update if content hasn't changed
-    }
-
-    // Only reset countdown if content changed significantly or if forced update
-    const shouldResetCountdown = forceUpdate || characterDifference > CONTENT_CHANGE_THRESHOLD
-    
-    if (!forceUpdate && timeSinceLastUpdate < UPDATE_INTERVAL && !shouldResetCountdown) {
-      return // Don't update if not enough time has passed and change is minor
     }
 
     setLoading(true)
@@ -222,14 +204,6 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
 
       setCharacters(successData.characters)
       setMetadata(successData.metadata || null)
-      setLastAnalyzedContent(text)
-      
-      // Only update last update time if we're resetting the countdown
-      if (shouldResetCountdown) {
-        setLastUpdateTime(now)
-      }
-      
-      lastContentRef.current = text
     } catch (error) {
       console.error("Character analysis error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unable to analyze characters. Please try again."
@@ -243,7 +217,7 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
 
   // Handle manual refresh
   const handleManualRefresh = () => {
-    analyzeCharacters(true)
+    analyzeCharacters()
   }
 
   // Generate character image
@@ -318,56 +292,300 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
     }
   }
 
-  // Update countdown timer
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = Date.now()
-      const timeSinceLastUpdate = now - lastUpdateTime
-      const remaining = Math.max(0, UPDATE_INTERVAL - timeSinceLastUpdate)
-      setTimeUntilNextUpdate(remaining)
-    }
-
-    // Update countdown every second
-    intervalRef.current = setInterval(updateCountdown, 1000)
-    updateCountdown() // Initial update
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [lastUpdateTime])
-
-  // Initial analysis when component loads with content
-  useEffect(() => {
-    const text = content.replace(/<[^>]*>/g, "").trim()
-    if (text.length >= MIN_TEXT_LENGTH && characters.length === 0 && !loading) {
-      analyzeCharacters()
-    }
-  }, []) // Only run once on mount
-
-  // Check for content changes and auto-update every 5 minutes
-  useEffect(() => {
-    const text = content.replace(/<[^>]*>/g, "").trim()
+  // Character name replacement functions
+  const findCharacterNameReferences = (characterName: string, content: string) => {
+    const references: Array<{text: string, start: number, end: number, type: 'first' | 'last' | 'full'}> = []
+    const nameVariations = generateNameVariations(characterName)
     
-    // Only run analysis if we have enough content and haven't analyzed this content before
-    if (text.length >= MIN_TEXT_LENGTH && text !== lastAnalyzedContent) {
-      const now = Date.now()
-      const timeSinceLastUpdate = now - lastUpdateTime
+    nameVariations.forEach(variation => {
+      const regex = new RegExp(`\\b${escapeRegExp(variation.text)}\\b`, 'gi')
+      let match
       
-      // Only auto-update if 5 minutes have passed since last update
-      if (timeSinceLastUpdate >= UPDATE_INTERVAL) {
-        analyzeCharacters()
+      while ((match = regex.exec(content)) !== null) {
+        references.push({
+          text: match[0],
+          start: match.index,
+          end: match.index + match[0].length,
+          type: variation.type
+        })
       }
-    }
-  }, [content, lastUpdateTime, lastAnalyzedContent])
+    })
+    
+    return references
+  }
 
-  // Format countdown timer
-  const formatCountdown = (ms: number) => {
-    const seconds = Math.ceil(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+  const generateNameVariations = (fullName: string) => {
+    const variations: Array<{text: string, type: 'first' | 'last' | 'full'}> = []
+    const nameParts = fullName.trim().split(/\s+/)
+    
+    if (nameParts.length === 0) return variations
+    
+    // Always add full name
+    variations.push({ text: fullName, type: 'full' })
+    
+    if (nameParts.length === 1) {
+      // Single name - treat as both first and last name
+      variations.push({ text: nameParts[0], type: 'first' })
+      variations.push({ text: nameParts[0], type: 'last' })
+    } else {
+      // Multiple names
+      // First name: everything except the last term
+      const firstName = nameParts.slice(0, -1).join(' ')
+      variations.push({ text: firstName, type: 'first' })
+      
+      // Last name: only the last term
+      const lastName = nameParts[nameParts.length - 1]
+      variations.push({ text: lastName, type: 'last' })
+    }
+    
+    return variations
+  }
+
+  const escapeRegExp = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+
+  const replaceCharacterName = (oldName: string, newName: string, content: string) => {
+    let newContent = content
+    const oldVariations = generateNameVariations(oldName)
+    const newVariations = generateNameVariations(newName)
+    let totalReplacements = 0
+    
+    // Create a map of old variation types to new names
+    const replacementMap = new Map<string, string>()
+    
+    // Map each type to the appropriate new name
+    oldVariations.forEach(oldVar => {
+      if (oldVar.type === 'full') {
+        replacementMap.set(oldVar.text, newName)
+      } else if (oldVar.type === 'first') {
+        // Find the new first name
+        const newFirstName = newVariations.find(v => v.type === 'first')
+        replacementMap.set(oldVar.text, newFirstName?.text || newName)
+      } else if (oldVar.type === 'last') {
+        // Find the new last name
+        const newLastName = newVariations.find(v => v.type === 'last')
+        replacementMap.set(oldVar.text, newLastName?.text || newName)
+      }
+    })
+    
+    // Perform replacements
+    replacementMap.forEach((newText, oldText) => {
+      const regex = new RegExp(`\\b${escapeRegExp(oldText)}\\b`, 'gi')
+      const matches = newContent.match(regex)
+      if (matches) {
+        totalReplacements += matches.length
+      }
+      newContent = newContent.replace(regex, newText)
+    })
+    
+    return { newContent, totalReplacements }
+  }
+
+  const handleEditCharacterName = (character: Character) => {
+    setEditingCharacter(character)
+    setNewCharacterName(character.name)
+    setShowNameChangeModal(true)
+  }
+
+  const handleNameChangeSubmit = () => {
+    if (!editingCharacter || !newCharacterName.trim()) return
+    
+    const oldName = editingCharacter.name
+    const newName = newCharacterName.trim()
+    
+    if (oldName === newName) {
+      setShowNameChangeModal(false)
+      setEditingCharacter(null)
+      setNewCharacterName("")
+      return
+    }
+    
+    // Generate preview for document content
+    const references = findCharacterNameReferences(oldName, content)
+    const { newContent, totalReplacements } = replaceCharacterName(oldName, newName, content)
+    
+    // Create preview text (first 200 characters around first occurrence)
+    let preview = ""
+    if (references.length > 0) {
+      const firstRef = references[0]
+      const start = Math.max(0, firstRef.start - 50)
+      const end = Math.min(content.length, firstRef.end + 50)
+      preview = content.substring(start, end)
+      if (start > 0) preview = "..." + preview
+      if (end < content.length) preview = preview + "..."
+    }
+    
+    // Generate preview for character description changes
+    let descriptionPreview = ""
+    if (editingCharacter.description) {
+      const oldVariations = generateNameVariations(oldName)
+      const newVariations = generateNameVariations(newName)
+      let updatedDescription = editingCharacter.description
+      
+      // Create a map of old variation types to new names
+      const replacementMap = new Map<string, string>()
+      
+      // Map each type to the appropriate new name
+      oldVariations.forEach(oldVar => {
+        if (oldVar.type === 'full') {
+          replacementMap.set(oldVar.text, newName)
+        } else if (oldVar.type === 'first') {
+          // Find the new first name
+          const newFirstName = newVariations.find(v => v.type === 'first')
+          replacementMap.set(oldVar.text, newFirstName?.text || newName)
+        } else if (oldVar.type === 'last') {
+          // Find the new last name
+          const newLastName = newVariations.find(v => v.type === 'last')
+          replacementMap.set(oldVar.text, newLastName?.text || newName)
+        }
+      })
+      
+      // Perform replacements in the description
+      replacementMap.forEach((newText, oldText) => {
+        // Handle both regular text and bold text (**name**)
+        const regex = new RegExp(`\\*\\*${escapeRegExp(oldText)}\\*\\*|\\b${escapeRegExp(oldText)}\\b`, 'gi')
+        updatedDescription = updatedDescription.replace(regex, (match) => {
+          // If it's bold text (**name**), keep the bold formatting
+          if (match.startsWith('**') && match.endsWith('**')) {
+            return `**${newText}**`
+          }
+          // Otherwise, just replace the text
+          return newText
+        })
+      })
+      
+      descriptionPreview = updatedDescription
+    }
+    
+    setNameChangePreview({
+      oldName,
+      newName,
+      replacements: totalReplacements,
+      preview,
+      descriptionPreview
+    })
+    
+    setShowNameChangeModal(false)
+    setShowConfirmationModal(true)
+  }
+
+  const handleConfirmNameChange = async () => {
+    if (!nameChangePreview || !onCharacterNameChange) return
+    
+    setIsProcessingNameChange(true)
+    
+    try {
+      await onCharacterNameChange(nameChangePreview.oldName, nameChangePreview.newName)
+      
+      // Update local character list and their descriptions
+      setCharacters(prev => prev.map(char => {
+        if (char.name === nameChangePreview.oldName) {
+          // Update the character name
+          const updatedChar = { ...char, name: nameChangePreview.newName }
+          
+          // Also update the description if it contains the old name
+          if (char.description) {
+            const oldVariations = generateNameVariations(nameChangePreview.oldName)
+            const newVariations = generateNameVariations(nameChangePreview.newName)
+            let updatedDescription = char.description
+            
+            // Create a map of old variation types to new names
+            const replacementMap = new Map<string, string>()
+            
+            // Map each type to the appropriate new name
+            oldVariations.forEach(oldVar => {
+              if (oldVar.type === 'full') {
+                replacementMap.set(oldVar.text, nameChangePreview.newName)
+              } else if (oldVar.type === 'first') {
+                // Find the new first name
+                const newFirstName = newVariations.find(v => v.type === 'first')
+                replacementMap.set(oldVar.text, newFirstName?.text || nameChangePreview.newName)
+              } else if (oldVar.type === 'last') {
+                // Find the new last name
+                const newLastName = newVariations.find(v => v.type === 'last')
+                replacementMap.set(oldVar.text, newLastName?.text || nameChangePreview.newName)
+              }
+            })
+            
+            // Perform replacements in the description
+            replacementMap.forEach((newText, oldText) => {
+              // Handle both regular text and bold text (**name**)
+              const regex = new RegExp(`\\*\\*${escapeRegExp(oldText)}\\*\\*|\\b${escapeRegExp(oldText)}\\b`, 'gi')
+              updatedDescription = updatedDescription.replace(regex, (match) => {
+                // If it's bold text (**name**), keep the bold formatting
+                if (match.startsWith('**') && match.endsWith('**')) {
+                  return `**${newText}**`
+                }
+                // Otherwise, just replace the text
+                return newText
+              })
+            })
+            
+            updatedChar.description = updatedDescription
+          }
+          
+          return updatedChar
+        }
+        return char
+      }))
+      
+      // Update character images mapping
+      if (characterImages[nameChangePreview.oldName]) {
+        setCharacterImages(prev => ({
+          ...prev,
+          [nameChangePreview.newName]: prev[nameChangePreview.oldName]
+        }))
+        setCharacterImages(prev => {
+          const newImages = { ...prev }
+          delete newImages[nameChangePreview.oldName]
+          return newImages
+        })
+      }
+      
+      // Update generating images mapping
+      if (generatingImages[nameChangePreview.oldName]) {
+        setGeneratingImages(prev => ({
+          ...prev,
+          [nameChangePreview.newName]: prev[nameChangePreview.oldName]
+        }))
+        setGeneratingImages(prev => {
+          const newGenerating = { ...prev }
+          delete newGenerating[nameChangePreview.oldName]
+          return newGenerating
+        })
+      }
+      
+      // Update image errors mapping
+      if (imageErrors[nameChangePreview.oldName]) {
+        setImageErrors(prev => ({
+          ...prev,
+          [nameChangePreview.newName]: prev[nameChangePreview.oldName]
+        }))
+        setImageErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors[nameChangePreview.oldName]
+          return newErrors
+        })
+      }
+      
+    } catch (error) {
+      console.error("Failed to update character name:", error)
+    } finally {
+      setIsProcessingNameChange(false)
+      setShowConfirmationModal(false)
+      setEditingCharacter(null)
+      setNewCharacterName("")
+      setNameChangePreview(null)
+    }
+  }
+
+  const handleCancelNameChange = () => {
+    setShowNameChangeModal(false)
+    setShowConfirmationModal(false)
+    setEditingCharacter(null)
+    setNewCharacterName("")
+    setNameChangePreview(null)
   }
 
   const getRoleColor = (role: string) => {
@@ -401,11 +619,6 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
               </>
             )}
           </button>
-          {!loading && characters.length > 0 && (
-            <span className="text-xs text-gray-500">
-              Next update in {formatCountdown(timeUntilNextUpdate)}
-            </span>
-          )}
         </div>
         <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mt-2">
           <Users className="h-4 w-4" />
@@ -445,7 +658,19 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
                     })()}
                   </div>
                   <div className="flex flex-col justify-center min-w-0">
-                    <h4 className="font-semibold text-lg text-gray-900 break-words leading-tight">{character.name}</h4>
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-semibold text-lg text-gray-900 break-words leading-tight">{character.name}</h4>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditCharacterName(character)
+                        }}
+                        className="flex-shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 bg-gray-100 border border-gray-300 rounded transition-colors"
+                        title="Edit character name"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                    </div>
                     <span className={`mt-0.5 text-xs px-2 py-1 rounded font-medium block w-fit ${getRoleColor(character.role)}`}>{character.role}</span>
                   </div>
                 </div>
@@ -619,7 +844,7 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
 
       {characters.length > 0 && !loading && !error && (
         <div className="text-xs text-gray-500 text-center">
-          Character analysis by AI • Updates every 5 minutes or on manual refresh
+          Character analysis by AI • Manual refresh only
         </div>
       )}
 
@@ -641,6 +866,162 @@ export function CharacterNotebook({ content }: CharacterNotebookProps) {
               alt={`Portrait of ${expandedImage.characterName}`}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Character Name Edit Modal */}
+      {showNameChangeModal && editingCharacter && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={handleCancelNameChange}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Character Name</h3>
+              <button
+                onClick={handleCancelNameChange}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Current Name
+                </label>
+                <div className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded border">
+                  {editingCharacter.name}
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="newCharacterName" className="block text-sm font-medium text-gray-700 mb-2">
+                  New Name
+                </label>
+                <input
+                  id="newCharacterName"
+                  type="text"
+                  value={newCharacterName}
+                  onChange={(e) => setNewCharacterName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter new character name..."
+                  autoFocus
+                />
+              </div>
+              
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Important Note:</p>
+                    <p className="mt-1">This will replace all references to "{editingCharacter.name}" throughout your document, including first names, last names, and full names. Character descriptions generated by AI will also be updated. Some nicknames or variations might not be automatically replaced.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={handleCancelNameChange}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleNameChangeSubmit}
+                disabled={!newCharacterName.trim() || newCharacterName.trim() === editingCharacter.name}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Character Name Change Confirmation Modal */}
+      {showConfirmationModal && nameChangePreview && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={handleCancelNameChange}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Character Name Change</h3>
+              <button
+                onClick={handleCancelNameChange}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertTriangle className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900">Change Summary</span>
+                </div>
+                <div className="text-sm text-blue-800 space-y-2">
+                  <p><span className="font-medium">From:</span> "{nameChangePreview.oldName}"</p>
+                  <p><span className="font-medium">To:</span> "{nameChangePreview.newName}"</p>
+                  <p><span className="font-medium">Replacements:</span> {nameChangePreview.replacements} occurrences</p>
+                </div>
+              </div>
+              
+              {nameChangePreview.preview && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Preview (first occurrence)
+                  </label>
+                  <div className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded border max-h-20 overflow-y-auto">
+                    {nameChangePreview.preview}
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Warning:</p>
+                    <p className="mt-1">This action cannot be undone. Some nicknames, abbreviations, or character references that don't exactly match the original name might not be automatically replaced. Character descriptions generated by AI will also be updated to reflect the new name.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={handleCancelNameChange}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmNameChange}
+                disabled={isProcessingNameChange}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-colors flex items-center space-x-2"
+              >
+                {isProcessingNameChange ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Confirm Change</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

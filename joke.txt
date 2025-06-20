@@ -1,6 +1,8 @@
 Why do programmers prefer dark mode?
 Because light attracts bugs! 🐛
 
+(And also because it's easier on the eyes during those late-night coding sessions!)
+
 ---
 
 Why did the AI go to therapy?
