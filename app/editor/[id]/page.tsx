@@ -7,13 +7,13 @@ import { AuthGuard } from "@/components/auth-guard"
 import { getDocument, updateDocument } from "@/lib/firestore"
 import type { Document, GrammarSuggestion, HighlightMark } from "@/lib/types"
 import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor"
+import { WritingSidebar, WritingSidebarRef } from "@/components/sidebar/writing-sidebar"
 import { Button } from "@/components/ui/button"
 import { toast, ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import { ArrowLeft, Save, Loader2, BookOpen } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { useDebounce } from "@/hooks/use-debounce"
-import { WritingSidebar } from "@/components/sidebar/writing-sidebar"
 import { DownloadButton } from "@/components/ui/download-button"
 import { cleanTextContent } from "@/lib/utils"
 
@@ -28,13 +28,20 @@ export default function EditorPage() {
   const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
   const [highlights, setHighlights] = useState<HighlightMark[]>([])
   const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'overview' | 'suggestions' | 'characters' | 'plot'>('overview')
+  const [highlightedSuggestionId, setHighlightedSuggestionId] = useState<string | undefined>()
   const editorRef = useRef<RichTextEditorRef>(null)
+  const sidebarRef = useRef<WritingSidebarRef>(null)
+  const lastCheckedContentRef = useRef<string>('')
 
   const documentId = params.id as string
 
   // Debounce content changes for autosave
   const debouncedContent = useDebounce(document?.content || "", 2000)
   const debouncedTitle = useDebounce(document?.title || "", 1000)
+
+  // Debounce the document content for automatic grammar checking
+  const debouncedGrammarCheck = useDebounce(document?.content || '', 3000)
 
   useEffect(() => {
     if (documentId && user) {
@@ -49,12 +56,21 @@ export default function EditorPage() {
     }
   }, [debouncedContent, debouncedTitle])
 
-  // Grammar checking effect
+  // Clear highlighted suggestion when suggestions change
   useEffect(() => {
-    if (document?.content && document.content.length > 10) {
-      checkGrammar(document.content)
-    }
-  }, [debouncedContent])
+    setHighlightedSuggestionId(undefined)
+  }, [grammarSuggestions])
+
+  // Automatic grammar checking when content changes (debounced)
+  // useEffect(() => {
+  //   if (debouncedGrammarCheck && debouncedGrammarCheck.trim() && !isCheckingGrammar) {
+  //     // Only check if content has actually changed
+  //     if (lastCheckedContentRef.current !== debouncedGrammarCheck) {
+  //       lastCheckedContentRef.current = debouncedGrammarCheck
+  //       checkGrammar(debouncedGrammarCheck)
+  //     }
+  //   }
+  // }, [debouncedGrammarCheck])
 
   const loadDocument = async () => {
     try {
@@ -97,6 +113,38 @@ export default function EditorPage() {
     }
   }, [document, documentId])
 
+  // Update suggestion positions when text changes
+  const updateSuggestionPositions = useCallback((oldContent: string, newContent: string, changeStart: number, changeEnd: number, newText: string) => {
+    const originalLength = changeEnd - changeStart
+    const newLength = newText.length
+    const lengthDifference = newLength - originalLength
+    
+    if (lengthDifference === 0) return // No position changes needed
+    
+    setGrammarSuggestions(prev => prev.map(suggestion => {
+      // If suggestion is completely before the change, keep it as is
+      if (suggestion.end <= changeStart) {
+        return suggestion
+      }
+      
+      // If suggestion overlaps with the change, remove it
+      if (suggestion.start < changeEnd && suggestion.end > changeStart) {
+        return null
+      }
+      
+      // If suggestion is completely after the change, adjust its position
+      if (suggestion.start >= changeEnd) {
+        return {
+          ...suggestion,
+          start: suggestion.start + lengthDifference,
+          end: suggestion.end + lengthDifference
+        }
+      }
+      
+      return suggestion
+    }).filter(Boolean) as GrammarSuggestion[])
+  }, [])
+
   const checkGrammar = async (content: string) => {
     if (!content.trim() || isCheckingGrammar) return
 
@@ -134,70 +182,119 @@ export default function EditorPage() {
   const handleApplySuggestion = (suggestion: GrammarSuggestion) => {
     if (!editorRef.current || !document) return
 
-    // Get current content
-    const currentContent = editorRef.current.getContent()
+    // Get the editor instance
+    const editor = editorRef.current
     
-    // Replace the problematic text with the suggestion
-    const newContent = currentContent.slice(0, suggestion.start) + 
-                      suggestion.suggestion + 
-                      currentContent.slice(suggestion.end)
+    // Get the current content before the change
+    const oldContent = editor.getContent()
+    
+    // Try to find and replace the text starting from the suggested position
+    const result = editor.findAndReplaceText(suggestion.text, suggestion.suggestion, suggestion.start)
+    
+    if (!result.success) {
+      // If not found at the suggested position, search the entire document
+      const fullResult = editor.findAndReplaceText(suggestion.text, suggestion.suggestion)
+      
+      if (!fullResult.success) {
+        // Text not found anywhere in the document
+        toast.error(`Could not find the text "${suggestion.text}" in the document. It may have been already corrected or removed.`)
+        return
+      }
+    }
     
     // Update document content
+    const newContent = editor.getContent()
     setDocument({ ...document, content: newContent })
     
-    // Remove the highlight for this suggestion
-    setHighlights(prev => prev.filter(h => 
-      !(h.from === suggestion.start && h.to === suggestion.end)
+    // Calculate the length difference between original text and suggestion
+    const originalLength = suggestion.text.length
+    const newLength = suggestion.suggestion.length
+    const lengthDifference = newLength - originalLength
+    
+    // Update highlight positions for highlights that come after the change
+    setHighlights(prev => prev.map(highlight => {
+      // If highlight is completely before the change, keep it as is
+      if (highlight.to <= suggestion.start) {
+        return highlight
+      }
+      
+      // If highlight overlaps with the change, remove it
+      if (highlight.from < suggestion.end && highlight.to > suggestion.start) {
+        return null
+      }
+      
+      // If highlight is completely after the change, adjust its position
+      if (highlight.from >= suggestion.end) {
+        return {
+          ...highlight,
+          from: highlight.from + lengthDifference,
+          to: highlight.to + lengthDifference
+        }
+      }
+      
+      return highlight
+    }).filter(Boolean) as HighlightMark[])
+    
+    // Update suggestion positions for remaining suggestions
+    updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, suggestion.suggestion)
+    
+    // Remove the applied suggestion from the list
+    setGrammarSuggestions(prev => prev.filter(s => 
+      !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
     ))
     
-    // Remove the suggestion from the list
-    setGrammarSuggestions(prev => prev.filter(s => 
-      !(s.start === suggestion.start && s.end === suggestion.end)
-    ))
+    // Show success toast
+    toast.success(`Applied correction: "${suggestion.text}" → "${suggestion.suggestion}"`)
   }
 
   const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {
     // Remove the highlight for this suggestion
     setHighlights(prev => prev.filter(h => 
-      !(h.from === suggestion.start && h.to === suggestion.end)
+      !(h.from === suggestion.start && h.to === suggestion.end && h.color === (suggestion.type === 'grammar' ? 'red' : 'yellow'))
     ))
     
     // Remove the suggestion from the list
     setGrammarSuggestions(prev => prev.filter(s => 
-      !(s.start === suggestion.start && s.end === suggestion.end)
+      !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
     ))
   }
 
   const handleHighlightClick = (highlight: HighlightMark) => {
     // Find the corresponding suggestion
     const suggestion = grammarSuggestions.find(s => 
-      s.start === highlight.from && s.end === highlight.to
+      s.start === highlight.from && s.end === highlight.to && 
+      (s.type === 'grammar' ? 'red' : 'yellow') === highlight.color
     )
     
     if (suggestion) {
-      // Show a toast with the suggestion details
-      toast.info(
-        <div>
-          <div className="font-semibold">Suggestion:</div>
-          <div className="text-sm mt-1">
-            <span className="text-red-600">{suggestion.text}</span> → 
-            <span className="text-green-600 ml-1">{suggestion.suggestion}</span>
-          </div>
-          {suggestion.description && (
-            <div className="text-xs text-gray-600 mt-1">{suggestion.description}</div>
-          )}
-        </div>,
-        {
-          autoClose: 5000,
-          closeButton: true,
-        }
-      )
+      // Print error reference to console
+      console.log('🔍 Spelling Error Clicked:', {
+        error: suggestion.text,
+        suggestion: suggestion.suggestion,
+        type: suggestion.type,
+        description: suggestion.description,
+        position: `from ${suggestion.start} to ${suggestion.end}`,
+        color: highlight.color,
+        highlightId: highlight.id
+      })
+      
+      // Generate suggestion ID that matches the format in WritingSuggestions
+      const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
+      
+      // Switch sidebar to writing suggestions tab
+      setActiveSidebarTab('suggestions')
+      setHighlightedSuggestionId(suggestionId)
     }
   }
 
   const handleManualSpellCheck = () => {
-    if (document?.content && !isCheckingGrammar) {
-      checkGrammar(document.content)
+    if (editorRef.current && !isCheckingGrammar) {
+      const currentContent = editorRef.current.getContent()
+      if (currentContent && currentContent.trim()) {
+        // Reset last checked content to force a new check
+        lastCheckedContentRef.current = ''
+        checkGrammar(currentContent)
+      }
     }
   }
 
@@ -238,100 +335,94 @@ export default function EditorPage() {
   }
 
   const handleBackToDashboard = async () => {
-    // Save the document before navigating back
+    // Save before leaving if there are unsaved changes
     if (document && !saving) {
-      try {
-        const cleanedContent = cleanTextContent(document.content)
-        await updateDocument(documentId, {
-          title: document.title,
-          content: cleanedContent,
-        })
-        setLastSaved(new Date())
-      } catch (error) {
-        console.error("Failed to save document before navigation:", error)
-      }
+      await saveDocument()
     }
-    
-    // Navigate back to dashboard
     router.push("/dashboard")
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
-        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-      </div>
+      <AuthGuard>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-600" />
+            <p className="text-gray-600">Loading document...</p>
+          </div>
+        </div>
+      </AuthGuard>
     )
   }
 
   if (!document) {
-    return null
+    return (
+      <AuthGuard>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-600">Document not found</p>
+            <Button onClick={() => router.push("/dashboard")} className="mt-4">
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </AuthGuard>
+    )
   }
 
   return (
-    <AuthGuard requireVerification>
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
+    <AuthGuard>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
         {/* Header */}
-        <header className="bg-white/70 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-10">
-          <div className="w-full px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between py-4">
+        <header className="bg-white/70 backdrop-blur-sm border-b border-purple-100 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-3">
-                  <BookOpen className="h-6 w-6 text-purple-600" />
-                  <span className="text-lg font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                    Wordwise AI
-                  </span>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleBackToDashboard}
-                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  className="text-gray-600 hover:text-gray-900"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Dashboard
                 </Button>
+                <div className="w-px h-6 bg-gray-300" />
+                <div className="flex items-center space-x-2">
+                  <BookOpen className="h-5 w-5 text-purple-600" />
+                  <span className="text-sm font-medium text-gray-900">Editor</span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-600 bg-white/50 px-3 py-1 rounded-full">
-                  {saving ? (
-                    <span className="flex items-center">
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      Saving...
-                    </span>
-                  ) : lastSaved ? (
-                    `Saved ${formatDistanceToNow(lastSaved, { addSuffix: true })}`
-                  ) : (
-                    "All changes saved"
-                  )}
-                </div>
-
-                {isCheckingGrammar && (
-                  <div className="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
-                    Checking grammar...
-                  </div>
+              <div className="flex items-center space-x-3">
+                {lastSaved && (
+                  <span className="text-xs text-gray-500">
+                    Saved {formatDistanceToNow(lastSaved, { addSuffix: true })}
+                  </span>
                 )}
-
-                <DownloadButton document={document} />
-
-                <Button 
-                  onClick={saveDocument} 
-                  disabled={saving} 
-                  size="sm"
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0"
+                <Button
+                  onClick={saveDocument}
+                  disabled={saving}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                  <span className="ml-2 text-xs opacity-60">Ctrl+S</span>
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </>
+                  )}
                 </Button>
+                <DownloadButton document={document} />
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="flex h-[calc(100vh-80px)]">
           <div className="flex-1 flex justify-center py-8 overflow-y-auto">
             <div className="max-w-4xl w-full px-4 sm:px-6 lg:px-8">
@@ -351,10 +442,14 @@ export default function EditorPage() {
             </div>
           </div>
           <WritingSidebar
+            ref={sidebarRef}
             content={document.content}
             suggestions={grammarSuggestions}
             onApplySuggestion={handleApplySuggestion}
             onDismissSuggestion={handleDismissSuggestion}
+            activeTab={activeSidebarTab}
+            onTabChange={setActiveSidebarTab}
+            highlightedSuggestionId={highlightedSuggestionId}
           />
         </main>
 

@@ -126,12 +126,13 @@ function parseCharacterResponse(response: string): any[] {
       typeof char.type === 'string'
     )
   } catch (error) {
-    console.error("JSON parsing error:", error)
     return []
   }
 }
 
 export async function POST(request: NextRequest) {
+  console.log("Character analysis API called")
+  
   try {
     // Validate request method
     if (request.method !== 'POST') {
@@ -164,7 +165,6 @@ export async function POST(request: NextRequest) {
       
       body = JSON.parse(bodyText)
     } catch (parseError) {
-      console.error("Character analysis - Request body parsing error:", parseError)
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
         { status: 400 }
@@ -183,7 +183,6 @@ export async function POST(request: NextRequest) {
 
     // Input validation
     if (!text || typeof text !== "string") {
-      console.error("Character analysis - Invalid text parameter:", text)
       return NextResponse.json(
         { error: ERROR_MESSAGES.INVALID_TEXT },
         { status: 400 }
@@ -191,7 +190,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (text.length < MIN_TEXT_LENGTH) {
-      console.error("Character analysis - Text too short:", text.length, "characters")
       return NextResponse.json(
         { error: ERROR_MESSAGES.TEXT_TOO_SHORT },
         { status: 400 }
@@ -201,7 +199,6 @@ export async function POST(request: NextRequest) {
     // Check if OpenAI API key is configured
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
-      console.error("Character analysis - OpenAI API key not configured")
       return NextResponse.json(
         { error: ERROR_MESSAGES.API_KEY_MISSING },
         { status: 500 }
@@ -212,7 +209,6 @@ export async function POST(request: NextRequest) {
     const optimizedText = optimizeInputText(text)
     
     // Generate character analysis using OpenAI
-    console.log("Character analysis - Calling OpenAI API...")
     const { text: response } = await generateText({
       model: openai("gpt-4o-mini"),
       system: CHARACTER_ANALYST_SYSTEM_PROMPT,
@@ -221,12 +217,8 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
-    console.log("Character analysis - OpenAI Response received")
-    console.log("Character analysis - Response length:", response?.length || 0)
-
     // Validate response
     if (!response || response.trim().length === 0) {
-      console.error("Character analysis - Empty response from OpenAI")
       return NextResponse.json(
         { error: "Generated analysis is empty. Please try again." },
         { status: 500 }
@@ -236,7 +228,6 @@ export async function POST(request: NextRequest) {
     // Parse the JSON response
     const characters = parseCharacterResponse(response)
 
-    console.log("Character analysis - Returning successful response")
     return NextResponse.json({ 
       characters,
       metadata: {
@@ -255,7 +246,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle general errors
-    console.error("Character analysis error:", error)
     return NextResponse.json(
       { error: ERROR_MESSAGES.API_ERROR },
       { status: 500 }

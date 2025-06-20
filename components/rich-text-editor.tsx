@@ -58,6 +58,9 @@ export interface RichTextEditorRef {
   focus: () => void
   getCursorPosition: () => number
   setCursorPosition: (position: number) => void
+  testHighlight: () => void
+  replaceText: (from: number, to: number, newText: string) => void
+  findAndReplaceText: (oldText: string, newText: string, startPosition?: number) => { success: boolean; position?: number }
 }
 
 // Custom Highlight Extension
@@ -105,7 +108,7 @@ const HighlightExtension = Extension.create({
             const highlights = tr.getMeta('highlights') as HighlightMark[] || []
             
             if (highlights.length === 0) {
-              return oldState
+              return DecorationSet.empty
             }
 
             const decorations = highlights.map(highlight => 
@@ -221,15 +224,25 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       addHighlight: (from: number, to: number, color: 'red' | 'yellow' | 'purple', id: string) => {
         if (!editor) return
         
+        // Get the current document text content
+        const docText = editor.state.doc.textContent
+        
+        // Validate positions
+        if (from < 0 || to > docText.length || from >= to) {
+          console.warn('Invalid highlight positions:', { from, to, docLength: docText.length })
+          return
+        }
+        
         const newHighlight: HighlightMark = { from, to, color, id }
         setCurrentHighlights(prev => [...prev, newHighlight])
         
         // Store current cursor position
         const currentPos = editor.state.selection.from
         
-        // Apply highlight to editor
-        editor.commands.setTextSelection({ from, to })
-        editor.commands.setMark('textStyle', { highlight: color })
+        // Apply highlight to editor using ProseMirror decorations
+        const tr = editor.state.tr
+        tr.setMeta('highlights', [...currentHighlights, newHighlight])
+        editor.view.dispatch(tr)
         
         // Restore cursor position
         setTimeout(() => {
@@ -244,7 +257,9 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       clearHighlights: () => {
         setCurrentHighlights([])
         if (editor) {
-          editor.commands.unsetMark('textStyle')
+          const tr = editor.state.tr
+          tr.setMeta('highlights', [])
+          editor.view.dispatch(tr)
         }
       },
       
@@ -274,22 +289,162 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           editor.commands.setTextSelection(position)
         }
       },
+      
+      testHighlight: () => {
+        if (!editor) return
+        
+        const docText = editor.state.doc.textContent
+        console.log('Test highlight - Document text:', {
+          length: docText.length,
+          preview: docText.substring(0, 50) + '...'
+        })
+        
+        // Add a test highlight at the beginning
+        const testHighlight: HighlightMark = {
+          from: 0,
+          to: Math.min(10, docText.length),
+          color: 'red',
+          id: 'test-highlight'
+        }
+        
+        console.log('Adding test highlight:', testHighlight)
+        
+        setCurrentHighlights([testHighlight])
+        
+        const tr = editor.state.tr
+        tr.setMeta('highlights', [testHighlight])
+        editor.view.dispatch(tr)
+      },
+      
+      replaceText: (from: number, to: number, newText: string) => {
+        if (editor) {
+          // Store current cursor position
+          const currentPos = editor.state.selection.from
+          
+          // Set selection to the range we want to replace
+          editor.commands.setTextSelection({ from, to })
+          
+          // Replace the selected text
+          editor.commands.insertContent(newText)
+          
+          // Restore cursor position
+          setTimeout(() => {
+            editor.commands.setTextSelection(currentPos)
+          }, 0)
+        }
+      },
+      
+      findAndReplaceText: (oldText: string, newText: string, startPosition?: number) => {
+        if (!editor) return { success: false }
+        
+        const doc = editor.state.doc
+        const content = doc.textBetween(0, doc.content.size)
+        
+        // First, try to find the text starting from the suggested position
+        if (startPosition !== undefined) {
+          const searchStart = Math.max(0, startPosition - 50) // Search 50 chars before the suggested position
+          const searchEnd = Math.min(content.length, startPosition + oldText.length + 50) // Search 50 chars after
+          const searchContent = content.substring(searchStart, searchEnd)
+          const foundIndex = searchContent.indexOf(oldText)
+          
+          if (foundIndex !== -1) {
+            const actualStart = searchStart + foundIndex + 1 // Shift right by 1 character
+            const actualEnd = actualStart + oldText.length
+            
+            // Store current cursor position
+            const currentPos = editor.state.selection.from
+            
+            // Set selection to the found text
+            editor.commands.setTextSelection({ from: actualStart, to: actualEnd })
+            
+            // Replace the selected text
+            editor.commands.insertContent(newText)
+            
+            // Restore cursor position
+            setTimeout(() => {
+              editor.commands.setTextSelection(currentPos)
+            }, 0)
+            
+            return { success: true, position: actualStart }
+          }
+        }
+        
+        // If not found at suggested position, search the entire document
+        const fullFoundIndex = content.indexOf(oldText)
+        
+        if (fullFoundIndex === -1) {
+          return { success: false }
+        }
+        
+        const actualStart = fullFoundIndex + 1 // Shift right by 1 character
+        const actualEnd = actualStart + oldText.length
+        
+        // Store current cursor position
+        const currentPos = editor.state.selection.from
+        
+        // Set selection to the found text
+        editor.commands.setTextSelection({ from: actualStart, to: actualEnd })
+        
+        // Replace the selected text
+        editor.commands.insertContent(newText)
+        
+        // Restore cursor position
+        setTimeout(() => {
+          editor.commands.setTextSelection(currentPos)
+        }, 0)
+        
+        return { success: true, position: actualStart }
+      },
     }))
 
     // Apply highlights when they change
     useEffect(() => {
       if (!editor || highlights.length === 0) return
       
-      setCurrentHighlights(highlights)
+      // Get the current document text content
+      const docText = editor.state.doc.textContent
+      
+      console.log('Applying highlights:', {
+        highlights,
+        docTextLength: docText.length,
+        docTextPreview: docText.substring(0, 100) + '...'
+      })
+      
+      // Validate and filter highlights
+      const validHighlights = highlights.filter(highlight => {
+        if (highlight.from < 0 || highlight.to > docText.length || highlight.from >= highlight.to) {
+          console.warn('Invalid highlight positions:', { 
+            from: highlight.from, 
+            to: highlight.to, 
+            docLength: docText.length,
+            highlight 
+          })
+          return false
+        }
+        
+        // Log the text being highlighted
+        const highlightedText = docText.substring(highlight.from, highlight.to)
+        console.log('Highlighting text:', {
+          from: highlight.from,
+          to: highlight.to,
+          text: highlightedText,
+          color: highlight.color
+        })
+        
+        return true
+      })
+      
+      if (validHighlights.length === 0) return
+      
+      setCurrentHighlights(validHighlights)
       
       // Store current cursor position
       const currentPos = editor.state.selection.from
       
-      // Apply highlights to editor
-      highlights.forEach(highlight => {
-        editor.commands.setTextSelection({ from: highlight.from, to: highlight.to })
-        editor.commands.setMark('textStyle', { highlight: highlight.color })
-      })
+      // Apply highlights using ProseMirror decorations
+      const tr = editor.state.tr
+      tr.setMeta('highlights', validHighlights)
+      editor.view.dispatch(tr)
       
       // Restore cursor position
       setTimeout(() => {
@@ -300,12 +455,22 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     // Handle highlight clicks
     const handleHighlightClick = useCallback((event: MouseEvent) => {
       const target = event.target as HTMLElement
-      if (target.classList.contains('highlight-red') || 
-          target.classList.contains('highlight-yellow') || 
-          target.classList.contains('highlight-purple')) {
-        const highlightId = target.getAttribute('data-highlight-id')
-        if (highlightId && onHighlightClick) {
-          const highlight = currentHighlights.find(h => h.id === highlightId)
+      
+      // Check if the clicked element has a highlight mark
+      const hasHighlight = target.hasAttribute('data-highlight') || 
+                          target.classList.contains('highlight-red') ||
+                          target.classList.contains('highlight-yellow') ||
+                          target.classList.contains('highlight-purple')
+      
+      if (hasHighlight) {
+        const highlightColor = target.getAttribute('data-highlight') || 
+                              (target.classList.contains('highlight-red') ? 'red' :
+                               target.classList.contains('highlight-yellow') ? 'yellow' :
+                               target.classList.contains('highlight-purple') ? 'purple' : null)
+        
+        if (highlightColor && onHighlightClick) {
+          // Find the highlight by color and position
+          const highlight = currentHighlights.find(h => h.color === highlightColor)
           if (highlight) {
             onHighlightClick(highlight)
           }

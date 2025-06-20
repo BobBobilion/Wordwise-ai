@@ -3,6 +3,8 @@ import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
 
 export async function POST(request: NextRequest) {
+  console.log("Writing analysis API called")
+  
   try {
     const { text } = await request.json()
 
@@ -27,7 +29,7 @@ For genre, choose from: Fantasy, Mystery, Romance, Science Fiction, Horror, Adve
 
 Return ONLY the JSON object, no other text.`,
       prompt: `Analyze this text for mood and genre: "${text}"`,
-      maxTokens: 100,
+      maxTokens: 1000,
       temperature: 0.3,
     })
 
@@ -45,7 +47,6 @@ Return ONLY the JSON object, no other text.`,
       })
     }
   } catch (error) {
-    console.error("Writing analysis error:", error)
     return NextResponse.json({ 
       mood: ["neutral"], 
       genre: "General Fiction" 

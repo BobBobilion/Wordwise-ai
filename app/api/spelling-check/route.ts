@@ -20,18 +20,14 @@ interface SpellingCheckResponse {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("Spelling check API called")
+  
   try {
     const { text }: SpellingCheckRequest = await request.json()
-    console.log('🔍 Spelling Check API - Received text:', text?.length, 'characters')
 
     if (!text || !text.trim()) {
-      console.log('❌ Spelling Check API - No text provided')
       return NextResponse.json({ suggestions: [] })
     }
-
-    console.log('📤 Spelling Check API - Sending to AI:')
-    console.log('📋 Raw text being sent:', JSON.stringify(text))
-    console.log('📋 Length:', text.length, 'characters')
 
     const { text: aiResponse } = await generateText({
       model: openai("gpt-4o-mini"),
@@ -57,11 +53,9 @@ Rules:
 
 Respond with ONLY the JSON array, no other text.`,
       prompt: `Check the spelling in this text: "${text}"`,
-      maxTokens: 1000,
+      maxTokens: 3000,
       temperature: 0.1,
     })
-
-    console.log('📥 Spelling Check API - AI Response:', aiResponse)
 
     // Parse AI response
     let suggestions: SpellingSuggestion[] = []
@@ -70,11 +64,9 @@ Respond with ONLY the JSON array, no other text.`,
       // Clean the response to extract JSON
       const jsonMatch = aiResponse.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
-        console.log('✅ Spelling Check API - Found JSON match:', jsonMatch[0])
         suggestions = JSON.parse(jsonMatch[0])
       } else {
         // Try parsing the entire response as JSON
-        console.log('🔄 Spelling Check API - Trying to parse full response as JSON')
         suggestions = JSON.parse(aiResponse)
       }
       
@@ -87,22 +79,15 @@ Respond with ONLY the JSON array, no other text.`,
         suggestion.type === 'spelling'
       )
       
-      console.log('🔍 Spelling Check API - Raw suggestions:', suggestions.length, suggestions)
-      console.log('✅ Spelling Check API - Valid suggestions:', validSuggestions.length, validSuggestions)
-      
       suggestions = validSuggestions
       
     } catch (parseError) {
-      console.error('❌ Spelling Check API - Failed to parse AI response:', parseError, 'Response:', aiResponse)
       suggestions = []
     }
 
-    console.log('📤 Spelling Check API - Final response:', { suggestions })
     return NextResponse.json({ suggestions })
 
   } catch (error) {
-    console.error('❌ Spelling Check API error:', error)
-    
     // Return empty suggestions on error (as requested)
     return NextResponse.json({ suggestions: [] })
   }

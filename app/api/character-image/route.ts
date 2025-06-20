@@ -40,8 +40,6 @@ function createImagePrompt(characterName: string, characterDescription: string):
 
 // Helper function to handle OpenAI API errors
 function handleOpenAIError(error: any): { status: number; message: string } {
-  console.error("OpenAI API error:", error)
-  
   if (error.status === 429) {
     return { status: 429, message: ERROR_MESSAGES.RATE_LIMIT }
   }
@@ -58,6 +56,8 @@ function handleOpenAIError(error: any): { status: number; message: string } {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("Character image API called")
+  
   try {
     // Parse and validate request body
     const body = await request.json()
@@ -149,7 +149,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle general errors
-    console.error("Character image generation error:", error)
     return NextResponse.json(
       { error: ERROR_MESSAGES.API_ERROR },
       { status: 500 }

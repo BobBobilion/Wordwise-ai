@@ -20,18 +20,14 @@ interface GrammarCheckResponse {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("Grammar check API called")
+  
   try {
     const { text }: GrammarCheckRequest = await request.json()
-    console.log('🔍 Grammar Check API - Received text:', text?.length, 'characters')
 
     if (!text || !text.trim()) {
-      console.log('❌ Grammar Check API - No text provided')
       return NextResponse.json({ suggestions: [] })
     }
-
-    console.log('📤 Grammar Check API - Sending to AI:')
-    console.log('📋 Raw text being sent:', JSON.stringify(text))
-    console.log('📋 Length:', text.length, 'characters')
 
     const { text: aiResponse } = await generateText({
       model: openai("gpt-4o-mini"),
@@ -62,8 +58,6 @@ Respond with ONLY the JSON array, no other text.`,
       temperature: 0.1,
     })
 
-    console.log('📥 Grammar Check API - AI Response:', aiResponse)
-
     // Parse AI response
     let suggestions: GrammarSuggestion[] = []
     
@@ -71,11 +65,9 @@ Respond with ONLY the JSON array, no other text.`,
       // Clean the response to extract JSON
       const jsonMatch = aiResponse.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
-        console.log('✅ Grammar Check API - Found JSON match:', jsonMatch[0])
         suggestions = JSON.parse(jsonMatch[0])
       } else {
         // Try parsing the entire response as JSON
-        console.log('🔄 Grammar Check API - Trying to parse full response as JSON')
         suggestions = JSON.parse(aiResponse)
       }
       
@@ -88,22 +80,15 @@ Respond with ONLY the JSON array, no other text.`,
         ['grammar', 'style'].includes(suggestion.type)
       )
       
-      console.log('🔍 Grammar Check API - Raw suggestions:', suggestions.length, suggestions)
-      console.log('✅ Grammar Check API - Valid suggestions:', validSuggestions.length, validSuggestions)
-      
       suggestions = validSuggestions
       
     } catch (parseError) {
-      console.error('❌ Grammar Check API - Failed to parse AI response:', parseError, 'Response:', aiResponse)
       suggestions = []
     }
 
-    console.log('📤 Grammar Check API - Final response:', { suggestions })
     return NextResponse.json({ suggestions })
 
   } catch (error) {
-    console.error('❌ Grammar Check API error:', error)
-    
     // Return empty suggestions on error (as requested)
     return NextResponse.json({ suggestions: [] })
   }

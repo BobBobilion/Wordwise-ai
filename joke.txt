@@ -65,7 +65,7 @@ Why do programmers prefer dark mode? Because light attracts bugs! 🐛
 ---
 
 Why did the React component feel lonely?
-Because it had no props! 🎭
+Because it had no props! 😄
 
 ---
 
@@ -139,4 +139,16 @@ Why did the AI go to therapy? Because it had too many deep learning issues! 🧠
 ---
 
 Why did the programmer get kicked out of the restaurant?
-Because he kept trying to order from the menu using SQL queries! 🍽️💻 
+Because he kept trying to order from the menu using SQL queries! 🍽️💻
+
+---
+
+Why did the highlight feel lonely in the text editor?
+Because it couldn't find its matching suggestion in the sidebar! 🎯📝 
+
+---
+
+Why did the programmer quit his job? Because he didn't get arrays! 😄 
+
+Why did the JavaScript developer go broke?
+Because he used up all his cache! 💰 

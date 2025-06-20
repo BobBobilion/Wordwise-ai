@@ -95,8 +95,6 @@ function optimizeInputText(text: string, maxTokens: number = 10000): string {
 
 // Helper function to handle OpenAI API errors
 function handleOpenAIError(error: any): { status: number; message: string } {
-  console.error("OpenAI API error:", error)
-  
   if (error.status === 429) {
     return { status: 429, message: ERROR_MESSAGES.RATE_LIMIT }
   }
@@ -113,6 +111,8 @@ function handleOpenAIError(error: any): { status: number; message: string } {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("Plot summary API called")
+  
   try {
     // Validate request method
     if (request.method !== 'POST') {
@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
       
       body = JSON.parse(bodyText)
     } catch (parseError) {
-      console.error("Request body parsing error:", parseError)
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
         { status: 400 }
@@ -164,7 +163,6 @@ export async function POST(request: NextRequest) {
 
     // Input validation
     if (!text || typeof text !== "string") {
-      console.error("Invalid text parameter:", text)
       return NextResponse.json(
         { error: ERROR_MESSAGES.INVALID_TEXT },
         { status: 400 }
@@ -172,7 +170,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (text.length < MIN_TEXT_LENGTH) {
-      console.error("Text too short:", text.length, "characters")
       return NextResponse.json(
         { error: ERROR_MESSAGES.TEXT_TOO_SHORT },
         { status: 400 }
@@ -182,7 +179,6 @@ export async function POST(request: NextRequest) {
     // Check if OpenAI API key is configured
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
-      console.error("OpenAI API key not configured")
       return NextResponse.json(
         { error: ERROR_MESSAGES.API_KEY_MISSING },
         { status: 500 }
@@ -193,7 +189,6 @@ export async function POST(request: NextRequest) {
     const optimizedText = optimizeInputText(text)
     
     // Generate plot summary using OpenAI
-    console.log("Calling OpenAI API...")
     const { text: responseText } = await generateText({
       model: openai("gpt-4o-mini"),
       system: LITERARY_ANALYST_SYSTEM_PROMPT,
@@ -202,11 +197,8 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
-    console.log("OpenAI Response received")
-
     // Validate response
     if (!responseText || responseText.trim().length === 0) {
-      console.error("Empty response from OpenAI")
       return NextResponse.json(
         { error: "Generated response is empty. Please try again." },
         { status: 500 }
@@ -223,36 +215,28 @@ export async function POST(request: NextRequest) {
       const jsonText = cleanedText.replace(/```json\s*|\s*```/g, '')
       
       parsedResponse = JSON.parse(jsonText)
-      console.log("Successfully parsed JSON response:", parsedResponse)
       
       // Validate the parsed structure
       if (!parsedResponse.plotSummary || !parsedResponse.actionableInsights) {
-        console.error("Invalid response structure - missing required fields:", parsedResponse)
         throw new Error("Invalid response structure - missing plotSummary or actionableInsights")
       }
       
       if (!Array.isArray(parsedResponse.plotSummary) || !Array.isArray(parsedResponse.actionableInsights)) {
-        console.error("Invalid response structure - fields are not arrays:", parsedResponse)
         throw new Error("Invalid response structure - plotSummary and actionableInsights must be arrays")
       }
 
       // Validate array contents
       if (parsedResponse.plotSummary.length === 0 && parsedResponse.actionableInsights.length === 0) {
-        console.error("Both arrays are empty:", parsedResponse)
         throw new Error("Response contains empty arrays")
       }
 
-      console.log("Validated response structure successfully")
     } catch (parseError) {
-      console.error("JSON parsing error:", parseError)
-      console.error("Raw response that failed to parse:", responseText)
       return NextResponse.json(
         { error: "Failed to parse AI response. Please try again." },
         { status: 500 }
       )
     }
 
-    console.log("Returning successful response")
     return NextResponse.json({ 
       plotSummary: parsedResponse.plotSummary,
       actionableInsights: parsedResponse.actionableInsights,
@@ -272,7 +256,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle general errors
-    console.error("Plot summary error:", error)
     return NextResponse.json(
       { error: ERROR_MESSAGES.API_ERROR },
       { status: 500 }
