@@ -154,13 +154,17 @@ export function TensionChart({ plotSummary, onPointClick, selectedPoint }: Tensi
               dataKey="tension"
               stroke="#3b82f6"
               strokeWidth={2}
-              dot={isHovering ? (props) => (
-                <CustomDot 
-                  {...props} 
-                  onClick={onPointClick}
-                  selectedPoint={selectedPoint}
-                />
-              ) : false}
+              dot={isHovering ? (props) => {
+                const { key, ...dotProps } = props
+                return (
+                  <CustomDot 
+                    key={key}
+                    {...dotProps} 
+                    onClick={onPointClick}
+                    selectedPoint={selectedPoint}
+                  />
+                )
+              } : false}
               activeDot={false}
             />
           </LineChart>

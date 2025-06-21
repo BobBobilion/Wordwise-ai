@@ -117,20 +117,30 @@ function parseCharacterResponse(response: string): any[] {
       throw new Error("Response is not an array")
     }
     
-    // Validate each character object with more lenient validation
+    // Validate and normalize each character object with more lenient validation
     const validCharacters = characters.filter((char) => {
-      const isValid = char && 
+      // Basic validation - require name, role, and description
+      const hasRequiredFields = char && 
         typeof char.name === 'string' && 
         typeof char.role === 'string' &&
-        typeof char.description === 'string' &&
-        typeof char.type === 'string'
+        typeof char.description === 'string'
       
       // Make mentions optional or handle different types
       const hasValidMentions = typeof char.mentions === 'number' || 
                               typeof char.mentions === 'string' ||
                               char.mentions === undefined
       
-      return isValid && hasValidMentions
+      return hasRequiredFields && hasValidMentions
+    }).map((char) => {
+      // Normalize the character object with default values for missing fields
+      return {
+        name: char.name,
+        mentions: typeof char.mentions === 'number' ? char.mentions : 
+                 typeof char.mentions === 'string' ? parseInt(char.mentions) || 0 : 0,
+        role: char.role,
+        description: char.description,
+        type: char.type || 'Human' // Default to 'Human' if type is missing
+      }
     })
     
     return validCharacters
@@ -226,6 +236,12 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
+    // Print the raw AI response to terminal
+    console.log('\n🤖 RAW AI RESPONSE:')
+    console.log('='.repeat(50))
+    console.log(response)
+    console.log('='.repeat(50))
+
     // Validate response
     if (!response || response.trim().length === 0) {
       return NextResponse.json(
@@ -236,6 +252,13 @@ export async function POST(request: NextRequest) {
 
     // Parse the JSON response
     const characters = parseCharacterResponse(response)
+
+    // Print parsed characters to terminal
+    console.log('\n🎭 PARSED CHARACTERS:')
+    console.log('='.repeat(50))
+    console.log(JSON.stringify(characters, null, 2))
+    console.log('='.repeat(50))
+    console.log(`Total characters found: ${characters.length}`)
 
     const finalResponse = { 
       characters,

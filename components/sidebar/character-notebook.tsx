@@ -695,10 +695,10 @@ export function CharacterNotebook({ content, onCharacterNameChange }: CharacterN
                           e.stopPropagation()
                           handleEditCharacterName(character)
                         }}
-                        className="flex-shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 bg-gray-100 border border-gray-300 rounded transition-colors"
+                        className="flex-shrink-0 p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 bg-gray-100 border border-gray-300 rounded transition-colors"
                         title="Edit character name"
                       >
-                        <Edit3 className="h-4 w-4" />
+                        <Edit3 className="h-3 w-3" />
                       </button>
                     </div>
                     <span className={`mt-0.5 text-xs px-2 py-1 rounded font-medium block w-fit ${getRoleColor(character.role)}`}>{character.role}</span>

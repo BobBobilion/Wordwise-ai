@@ -71,6 +71,10 @@ Because it had no props! 😄
 
 ---
 
+Why did the React component go to therapy? Because it had too many props and couldn't handle the spread!
+
+---
+
 What do you call a programmer from Finland? Nerdic!
 
 ---
