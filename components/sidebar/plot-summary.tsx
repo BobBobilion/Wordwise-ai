@@ -74,6 +74,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
   const [error, setError] = useState<string>("")
   const [metadata, setMetadata] = useState<PlotSummaryResponse['metadata'] | null>(null)
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null)
+  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null)
   
   // Plot suggestions state
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -290,6 +291,8 @@ export function PlotSummary({ content }: PlotSummaryProps) {
                       selectedPoint === index ? 'bg-blue-50 border border-blue-200' : ''
                     }`}
                     onClick={() => handlePointClick(index)}
+                    onMouseEnter={() => setHoveredPoint(index)}
+                    onMouseLeave={() => setHoveredPoint(null)}
                   >
                     <span className="text-blue-600 font-bold mt-0.5 min-w-[20px]">{index + 1}.</span>
                     <div 
@@ -306,6 +309,7 @@ export function PlotSummary({ content }: PlotSummaryProps) {
               plotSummary={summary}
               onPointClick={handlePointClick}
               selectedPoint={selectedPoint}
+              hoveredPoint={hoveredPoint}
             />
 
             {/* Actionable Insights Section */}

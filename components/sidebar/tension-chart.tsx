@@ -12,6 +12,7 @@ interface TensionChartProps {
   plotSummary: PlotPoint[]
   onPointClick: (index: number) => void
   selectedPoint: number | null
+  hoveredPoint: number | null
 }
 
 interface ChartDataPoint {
@@ -49,27 +50,31 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const data = payload[0].payload as ChartDataPoint
     return (
       <div 
-        className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-w-xs"
+        className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 max-w-xs"
         style={{ 
-          transform: 'translateY(-100%) translateY(-10px)',
+          transform: 'translateY(-100%) translateY(-10px) translateX(-10%)',
           marginBottom: '10px'
         }}
       >
-        <div 
-          className="text-sm text-gray-700 leading-relaxed"
-          dangerouslySetInnerHTML={createMarkup(markdownToHtml(data.point))}
-        />
+        <div className="flex items-start">
+          <span className="text-blue-600 min-w-[20px] flex items-center justify-center w-5 h-5 rounded-full border border-blue-600 text-xs font-medium mr-1 mt-0.5">{data.index}</span>
+          <div 
+            className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={createMarkup(markdownToHtml(data.point))}
+          />
+        </div>
       </div>
     )
   }
   return null
 }
 
-const CustomDot = ({ cx, cy, payload, index, onClick, selectedPoint }: any) => {
+const CustomDot = ({ cx, cy, payload, index, onClick, selectedPoint, hoveredPoint, visible }: any) => {
   const isSelected = selectedPoint === index
+  const isHoveredInSummary = hoveredPoint === index
   
   return (
-    <g>
+    <g style={{ opacity: visible ? 1 : 0, transition: 'opacity 0s ease-in-out' }}>
       {/* Background circle for better clickability */}
       <circle
         cx={cx}
@@ -85,8 +90,8 @@ const CustomDot = ({ cx, cy, payload, index, onClick, selectedPoint }: any) => {
         cy={cy}
         r={8}
         fill={isSelected ? "#3b82f6" : "#ffffff"}
-        stroke={isSelected ? "#1d4ed8" : "#3b82f6"}
-        strokeWidth={isSelected ? 3 : 2}
+        stroke={isSelected ? "#1d4ed8" : isHoveredInSummary ? "#3b82f6" : "#3b82f6"}
+        strokeWidth={isSelected ? 3 : isHoveredInSummary ? 2 : 2}
         onClick={() => onClick(index)}
         style={{ cursor: 'pointer' }}
       />
@@ -108,7 +113,7 @@ const CustomDot = ({ cx, cy, payload, index, onClick, selectedPoint }: any) => {
   )
 }
 
-export function TensionChart({ plotSummary, onPointClick, selectedPoint }: TensionChartProps) {
+export function TensionChart({ plotSummary, onPointClick, selectedPoint, hoveredPoint }: TensionChartProps) {
   const [isHovering, setIsHovering] = useState(false)
   
   // Transform data for the chart
@@ -154,17 +159,23 @@ export function TensionChart({ plotSummary, onPointClick, selectedPoint }: Tensi
               dataKey="tension"
               stroke="#3b82f6"
               strokeWidth={2}
-              dot={isHovering ? (props) => {
+              dot={(props) => {
                 const { key, ...dotProps } = props
+                const isSelected = selectedPoint === (dotProps.payload.index - 1)
+                const isHoveredInSummary = hoveredPoint === (dotProps.payload.index - 1)
+                const shouldShow = isHovering || isSelected || isHoveredInSummary
+                
                 return (
                   <CustomDot 
                     key={key}
                     {...dotProps} 
                     onClick={onPointClick}
                     selectedPoint={selectedPoint}
+                    hoveredPoint={hoveredPoint}
+                    visible={shouldShow}
                   />
                 )
-              } : false}
+              }}
               activeDot={false}
             />
           </LineChart>
