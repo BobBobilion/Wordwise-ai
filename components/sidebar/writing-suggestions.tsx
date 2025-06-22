@@ -3,10 +3,11 @@
 import { CheckCircle, AlertCircle, X } from "lucide-react"
 import { useEffect, useRef } from "react"
 import type { GrammarSuggestion } from "@/lib/types"
+import { Button } from "@/components/ui/button"
 
 interface WritingSuggestionsProps {
   suggestions: GrammarSuggestion[]
-  onApplySuggestion: (suggestion: GrammarSuggestion) => void
+  onApplySuggestion: (suggestion: GrammarSuggestion, replacement: string) => void
   onDismissSuggestion: (suggestion: GrammarSuggestion) => void
   isChecking?: boolean
   highlightedSuggestionId?: string
@@ -113,45 +114,61 @@ export function WritingSuggestions({
           return (
             <div 
               key={index} 
-              className="bg-gray-50 rounded-lg p-3 border transition-all duration-200"
+              className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm transition-all duration-200"
               data-suggestion-id={suggestionId}
             >
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <AlertCircle className={`h-3 w-3 ${iconColor}`} />
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertCircle className={`h-4 w-4 ${iconColor}`} />
                     <span
-                      className={`text-xs px-2 py-1 rounded ${badgeBgColor} ${badgeTextColor}`}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeBgColor}`}
                     >
                       {suggestion.type}
                     </span>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="text-sm">
-                      <span className="line-through text-red-600 bg-red-50 px-1 rounded">{suggestion.text}</span>
-                      <span className="mx-2 text-gray-400">→</span>
-                      <span className="text-green-600 bg-green-50 px-1 rounded font-medium">{suggestion.suggestion}</span>
-                    </div>
+                  <p className="text-sm text-gray-600 mb-2">
+                    {suggestion.description?.split('`').map((part, i) =>
+                      i % 2 === 1 ? <strong key={i} className="text-gray-900 font-bold">{part}</strong> : <span key={i}>{part}</span>
+                    )}
+                  </p>
 
-                    {suggestion.description && <p className="text-xs text-gray-600">{suggestion.description}</p>}
+                  <div className="text-sm mb-3">
+                    <span className="font-medium text-gray-700">Found:</span>
+                    <span className="ml-2 line-through text-red-700 bg-red-100 px-2 py-0.5 rounded">{suggestion.text}</span>
                   </div>
+
+                  {suggestion.suggestions && suggestion.suggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {suggestion.suggestions.slice(0, 3).map((altSuggestion, altIndex) => (
+                        <Button
+                          key={altIndex}
+                          onClick={() => onApplySuggestion(suggestion, altSuggestion)}
+                          size="sm"
+                          variant={altIndex === 0 ? 'default' : 'outline'}
+                          className={
+                            altIndex === 0
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'text-blue-600 border-blue-400 hover:bg-blue-50'
+                          }
+                        >
+                          {altSuggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <button
+                <Button
                   onClick={() => onDismissSuggestion(suggestion)}
-                  className="ml-2 p-1 text-gray-400 hover:text-gray-600"
+                  size="icon"
+                  variant="ghost"
+                  className="ml-2 h-8 w-8 text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-3 w-3" />
-                </button>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-
-              <button
-                onClick={() => onApplySuggestion(suggestion)}
-                className="w-full px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                Apply Fix
-              </button>
             </div>
           )
         })}
@@ -159,13 +176,13 @@ export function WritingSuggestions({
 
       {/* Accept All Button */}
       {suggestions.length > 0 && (
-        <div className="pt-4 border-t border-gray-200">
-          <button
-            onClick={() => suggestions.forEach(suggestion => onApplySuggestion(suggestion))}
-            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        <div className="pt-4 mt-4 border-t border-gray-200">
+          <Button
+            onClick={() => suggestions.forEach(s => onApplySuggestion(s, s.suggestion))}
+            className="w-full bg-blue-600 hover:bg-blue-700"
           >
             Accept All ({suggestions.length} suggestions)
-          </button>
+          </Button>
         </div>
       )}
     </div>

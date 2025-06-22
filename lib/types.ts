@@ -16,6 +16,7 @@ export interface Document {
 export interface GrammarSuggestion {
   text: string
   suggestion: string
+  suggestions: string[]
   start: number
   end: number
   type: "grammar" | "style" | "spelling"

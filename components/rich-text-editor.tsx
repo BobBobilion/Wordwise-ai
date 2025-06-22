@@ -348,7 +348,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           const foundIndex = searchContent.indexOf(oldText)
           
           if (foundIndex !== -1) {
-            const actualStart = searchStart + foundIndex + 2 // Shift right by 1 character
+            const actualStart = searchStart + foundIndex + 1 // Shift right by 1 character
             const actualEnd = actualStart + oldText.length
             
             // Store current cursor position

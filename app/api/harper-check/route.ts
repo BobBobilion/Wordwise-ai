@@ -11,7 +11,7 @@ interface GrammarSuggestion {
   suggestion: string
   start: number
   end: number
-  type: "grammar" | "spelling"
+  type: "grammar" | "spelling" | "style"
   description?: string
 }
 
@@ -141,7 +141,7 @@ function mapHarperResponse(harperLints: any[], originalText: string): GrammarSug
   console.log("Number of lints found:", harperLints.length)
   
   const mappedSuggestions = harperLints.map((lint, index) => {
-    let start = 0, end = 0, suggestionsArr = [], description = '', type = 'grammar';
+    let start = 0, end = 0, suggestionsArr: string[] = [], description = '', type: 'grammar' | 'spelling' | 'style' = 'grammar';
     try {
       // Call the correct methods on the Lint object
       let span = { start: 0, end: 0 };
@@ -150,41 +150,58 @@ function mapHarperResponse(harperLints: any[], originalText: string): GrammarSug
         start = span.start;
         end = span.end;
       }
+      
+      // ✅ FIXED: Use correct Harper.js suggestion extraction
       if (typeof lint.suggestions === 'function') {
         const rawSuggestions = lint.suggestions();
         suggestionsArr = rawSuggestions.map((s: any) => {
           if (typeof s === 'string') return s;
           if (typeof s === 'object' && s !== null) {
-            if (typeof s.value === 'function') return s.value();
-            if (typeof s.text === 'function') return s.text();
+            // Use the correct Harper.js method
+            if (typeof s.get_replacement_text === 'function') {
+              return s.get_replacement_text();
+            }
+            // Fallback to toString if get_replacement_text doesn't exist
             if (typeof s.toString === 'function') {
               const str = s.toString();
-              if (str && str !== '[object Object]') return str;
+              if (str && str !== '[object Object]' && !str.includes('__wbg_ptr')) {
+                return str;
+              }
             }
           }
           return '';
         }).filter(Boolean);
       }
+      
       if (typeof lint.message === 'function') description = lint.message();
-      if (typeof lint.kind === 'function') {
-        const kindVal = lint.kind();
-        if (kindVal && kindVal.toLowerCase() === 'spelling') type = 'spelling';
-        else type = 'grammar';
+      
+      // Manual classification based on description text
+      const descriptionLower = description.toLowerCase();
+      if (descriptionLower.includes('did you mean to spell')) {
+        type = 'spelling';
+      } else if (descriptionLower.includes('vocabulary enhancement')) {
+        type = 'style';
+      } else {
+        type = 'grammar';
       }
     } catch (e) {
       console.log('Error extracting lint:', e);
     }
+    
     const text = originalText.substring(start, end);
-    const typeSafe: 'grammar' | 'spelling' = type === 'spelling' ? 'spelling' : 'grammar';
+    const typeSafe: 'grammar' | 'spelling' | 'style' = type;
+    
     console.log(`\n--- Lint ${index + 1} ---`);
     console.log("Description:", description);
     console.log("Kind:", typeSafe);
     console.log("Span:", { start, end });
     console.log("Text found:", text);
     console.log("Suggestions:", suggestionsArr);
+    
     return {
       text,
-      suggestion: suggestionsArr[0] || text,
+      suggestions: suggestionsArr.length > 0 ? suggestionsArr : [text],
+      suggestion: suggestionsArr[0] || text, // Keep for compatibility if needed, but suggestions array is primary
       start,
       end,
       type: typeSafe,

@@ -182,7 +182,7 @@ export default function EditorPage() {
     }
   }
 
-  const handleApplySuggestion = (suggestion: GrammarSuggestion) => {
+  const handleApplySuggestion = (suggestion: GrammarSuggestion, replacementText: string) => {
     if (!editorRef.current || !document) return
 
     // Get the editor instance
@@ -191,16 +191,16 @@ export default function EditorPage() {
     // Get the current content before the change
     const oldContent = editor.getContent()
     
-    // Try to find and replace the text starting from the suggested position
-    const result = editor.findAndReplaceText(suggestion.text, suggestion.suggestion, suggestion.start)
-    
-    if (!result.success) {
-      // If not found at the suggested position, search the entire document
-      const fullResult = editor.findAndReplaceText(suggestion.text, suggestion.suggestion)
+    // ✅ FIXED: Use exact position-based replacement with the chosen replacement text
+    try {
+      editor.replaceText(suggestion.start + 1, suggestion.end + 1, replacementText)
+    } catch (error) {
+      // Fallback: if position-based replacement fails, try text search
+      console.warn('Position-based replacement failed, falling back to text search for:', suggestion.text)
+      const searchResult = editor.findAndReplaceText(suggestion.text, replacementText, suggestion.start)
       
-      if (!fullResult.success) {
-        // Text not found anywhere in the document
-        toast.error(`Could not find the text "${suggestion.text}" in the document. It may have been already corrected or removed.`)
+      if (!searchResult.success) {
+        toast.error(`Could not find the text "${suggestion.text}" at the expected position. It may have been already corrected or removed.`)
         return
       }
     }
@@ -211,7 +211,7 @@ export default function EditorPage() {
     
     // Calculate the length difference between original text and suggestion
     const originalLength = suggestion.text.length
-    const newLength = suggestion.suggestion.length
+    const newLength = replacementText.length
     const lengthDifference = newLength - originalLength
     
     // Update highlight positions for highlights that come after the change
@@ -239,7 +239,7 @@ export default function EditorPage() {
     }).filter(Boolean) as HighlightMark[])
     
     // Update suggestion positions for remaining suggestions
-    updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, suggestion.suggestion)
+    updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, replacementText)
     
     // Remove the applied suggestion from the list
     setGrammarSuggestions(prev => prev.filter(s => 
