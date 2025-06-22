@@ -144,7 +144,7 @@ export const WritingOverview = forwardRef<WritingOverviewRef, WritingOverviewPro
               </span>
             ) : (
               aiAnalysis.mood.map((mood, index) => (
-                <span key={index} className={`px-3 py-1 rounded-full text-xs font-medium ${getMoodColor(mood)}`}>
+                <span key={index} className={`px-3 py-1 rounded-full text-xs font-medium ${getMoodColor(mood)} transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer`}>
                   {mood.charAt(0).toUpperCase() + mood.slice(1)}
                 </span>
               ))

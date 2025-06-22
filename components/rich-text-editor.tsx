@@ -26,6 +26,27 @@ import {
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
+// Custom TextStyle extension with font size support
+const CustomTextStyle = TextStyle.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fontSize: {
+        default: null,
+        parseHTML: element => element.style.fontSize,
+        renderHTML: attributes => {
+          if (!attributes.fontSize) {
+            return {}
+          }
+          return {
+            style: `font-size: ${attributes.fontSize}`,
+          }
+        },
+      },
+    }
+  },
+})
+
 interface RichTextEditorProps {
   content: string
   onChange: (content: string) => void
@@ -76,7 +97,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         FontFamily.configure({
           types: ['textStyle'],
         }),
-        TextStyle,
+        CustomTextStyle,
         Underline,
         History.configure({
           depth: 100,

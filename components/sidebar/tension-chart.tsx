@@ -45,9 +45,11 @@ function createMarkup(htmlContent: string) {
   return { __html: htmlContent }
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, selectedPoint }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as ChartDataPoint
+    const isSelected = selectedPoint === (data.index - 1)
+    
     return (
       <div 
         className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 max-w-xs"
@@ -57,7 +59,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         }}
       >
         <div className="flex items-start">
-          <span className="text-blue-600 min-w-[20px] flex items-center justify-center w-5 h-5 rounded-full border border-blue-600 text-xs font-medium mr-1 mt-0.5">{data.index}</span>
+          <span className={`text-blue-600 min-w-[20px] flex items-center justify-center w-5 h-5 rounded-full text-xs font-medium mr-1 mt-0.5 ${
+            isSelected 
+              ? 'bg-blue-500 text-white border-2 border-blue-700' 
+              : 'border border-blue-600'
+          }`}>{data.index}</span>
           <div 
             className="text-sm text-gray-700 leading-relaxed flex-1 prose prose-sm max-w-none"
             dangerouslySetInnerHTML={createMarkup(markdownToHtml(data.point))}
@@ -153,7 +159,7 @@ export function TensionChart({ plotSummary, onPointClick, selectedPoint, hovered
               domain={[0, 100]}
               hide
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip selectedPoint={selectedPoint} />} />
             <Line
               type="monotone"
               dataKey="tension"

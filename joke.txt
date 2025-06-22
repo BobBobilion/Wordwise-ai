@@ -179,3 +179,7 @@ Why don't programmers like nature? It has too many bugs! 🐛
 But seriously, Harper.js is like having a grammar teacher who never sleeps, never charges by the hour, and doesn't judge your writing style - it just fixes your spelling and grammar in under 20ms! ⚡ 
 
 Why did the Harper.js object feel empty? Because it was missing its WASM properties! 
+
+Why do programmers prefer dark mode? Because light attracts bugs! 🐛 
+
+Why did the mood chip feel elevated? Because it had a chip on its shoulder! 😄 
