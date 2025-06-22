@@ -346,6 +346,11 @@ export default function EditorPage() {
       const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
       setSelectedCardId(suggestionId)
       setHighlightedSuggestionId(suggestionId)
+      
+      // Scroll the editor to the error position
+      if (editorRef.current) {
+        editorRef.current.scrollToPosition(suggestion.start)
+      }
     } else {
       // Card selection was cleared (clicked outside or switched tabs)
       setSelectedCardId(null)

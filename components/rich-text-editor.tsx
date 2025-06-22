@@ -139,6 +139,7 @@ export interface RichTextEditorRef {
   focus: () => void
   getCursorPosition: () => number
   setCursorPosition: (position: number) => void
+  scrollToPosition: (position: number) => void
   testHighlight: () => void
   replaceText: (from: number, to: number, newText: string) => void
   findAndReplaceText: (oldText: string, newText: string, startPosition?: number) => { success: boolean; position?: number }
@@ -239,7 +240,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           event.stopPropagation()
           
           const highlightId = highlightElement.getAttribute('data-highlight-id')
-          const highlight = highlights.find(h => h.id === highlightId)
+          const highlight = highlights.find(h => h.id === highlightId) || 
+                           (persistentHighlight && persistentHighlight.id === highlightId ? persistentHighlight : null)
           
           if (highlight) {
             // Show suggestion menu
@@ -250,9 +252,9 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
             )
             
             if (suggestion && suggestion.suggestions && suggestion.suggestions.length > 0) {
-              // Position like bubble menu - center on the text
+              // Position like bubble menu - use first character position plus estimated offset
               const editorRect = editor.view.dom.getBoundingClientRect()
-              const x = rect.left - editorRect.left + (rect.width / 2)
+              const x = rect.left - editorRect.left + 20 // Start at first character + small offset
               const y = rect.top - editorRect.top
               
               setSuggestionMenu({
@@ -281,7 +283,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       return () => {
         editorElement.removeEventListener('click', handleClick, true)
       }
-    }, [editor, highlights, onHighlightClick, grammarSuggestions])
+    }, [editor, highlights, onHighlightClick, grammarSuggestions, persistentHighlight])
 
     // Add global click handler to hide menu when clicking outside
     useEffect(() => {
@@ -390,6 +392,27 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       setCursorPosition: (position: number) => {
         if (editor) {
           editor.commands.setTextSelection(position)
+        }
+      },
+      
+      scrollToPosition: (position: number) => {
+        if (editor) {
+          // Set the cursor position to the target position
+          editor.commands.setTextSelection(position)
+          
+          // Scroll the editor to make the position visible with some offset
+          editor.commands.scrollIntoView()
+          
+          // Add a small delay and scroll a bit more to position the error lower in the viewport
+          setTimeout(() => {
+            const editorElement = editor.view.dom
+            if (editorElement) {
+              editorElement.scrollTop += 100 // Scroll down by 100px to position error lower
+            }
+          }, 50)
+          
+          // Focus the editor
+          editor.commands.focus()
         }
       },
       
@@ -674,12 +697,14 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
               className="absolute z-50 flex items-center gap-2 p-3 bg-white border rounded-lg shadow-lg"
               style={{
                 left: `${suggestionMenu.x}px`,
-                top: `${suggestionMenu.y - 0}px`,
-                transform: 'translateX(-50%) translateY(-100%)'
+                top: `${suggestionMenu.y - 5}px`,
+                transform: 'translateX(-50%) translateY(-100%)',
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 whitespace-nowrap">
                 <span className="line-through text-red-600">{suggestionMenu.suggestion.text}</span>
                 <span className="mx-2">→</span>
                 <button
