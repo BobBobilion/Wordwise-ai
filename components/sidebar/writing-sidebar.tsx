@@ -6,6 +6,7 @@ import { WritingSuggestions } from "./writing-suggestions"
 import { CharacterNotebook } from "./character-notebook"
 import { PlotSummary } from "./plot-summary"
 import type { GrammarSuggestion } from "@/lib/types"
+import React from "react"
 
 interface WritingSidebarProps {
   content: string
@@ -100,23 +101,27 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
         {/* Tab Headers */}
         <div className="border-b border-purple-100 bg-white/50">
           <nav className="flex flex-nowrap overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`flex-1 px-3 py-3 text-xs font-medium text-center border-b-2 transition-all duration-200 ${
-                  currentActiveTab === tab.id
-                    ? "border-purple-500 text-purple-600 bg-purple-50/70"
-                    : "border-transparent text-gray-600 hover:text-purple-600 hover:border-purple-300 hover:bg-purple-50/30"
-                }`}
-              >
-                {tab.label}
-                {tab.id === "suggestions" && suggestions.length > 0 && (
-                  <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                    {suggestions.length}
-                  </span>
+            {tabs.map((tab, index) => (
+              <React.Fragment key={tab.id}>
+                <button
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`flex-1 px-3 py-3 text-xs font-medium text-center border-b-2 transition-all duration-200 relative ${
+                    currentActiveTab === tab.id
+                      ? "border-purple-500 text-purple-600 bg-purple-50/70"
+                      : tab.id === "suggestions" && suggestions.length > 0
+                      ? "border-transparent text-gray-600 hover:text-purple-600 hover:border-purple-300 hover:bg-purple-50/30 bg-red-50/50 border-2 border-red-200/50"
+                      : "border-transparent text-gray-600 hover:text-purple-600 hover:border-purple-300 hover:bg-purple-50/30"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.id === "suggestions" && suggestions.length > 0 && (
+                    <span className="absolute top-2 right-2 bg-red-500 rounded-full w-3 h-3" />
+                  )}
+                </button>
+                {index < tabs.length - 1 && (
+                  <div className="w-px h-6 bg-gray-200 self-center" />
                 )}
-              </button>
+              </React.Fragment>
             ))}
           </nav>
         </div>
