@@ -66,6 +66,13 @@ const HighlightExtension = Extension.create({
             try {
               const highlights = tr.getMeta('highlights')
               
+              // If no highlights metadata, keep the old state
+              if (highlights === undefined) {
+                return oldState
+              }
+              
+              console.log('🔍 Highlight plugin applying highlights:', highlights)
+              
               if (!highlights || !Array.isArray(highlights) || highlights.length === 0) {
                 return DecorationSet.empty
               }
@@ -80,6 +87,7 @@ const HighlightExtension = Extension.create({
                   return null
                 }
                 
+                console.log('🔍 Creating decoration for highlight:', highlight)
                 return Decoration.inline(
                   from + 1,
                   to + 1,
@@ -93,7 +101,7 @@ const HighlightExtension = Extension.create({
               return DecorationSet.create(tr.doc, decorations)
             } catch (error) {
               console.error('Error in highlight plugin apply:', error)
-              return DecorationSet.empty
+              return oldState // Keep old state on error
             }
           },
         },
@@ -192,9 +200,12 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
     // Update highlights when they change
     useEffect(() => {
+      console.log('🔍 Updating highlights:', highlights)
       setCurrentHighlights(highlights)
       if (editor) {
-        editor.view.dispatch(editor.state.tr.setMeta('highlights', highlights))
+        // Use a transaction that doesn't trigger content changes
+        const tr = editor.state.tr.setMeta('highlights', highlights)
+        editor.view.dispatch(tr)
       }
     }, [highlights, editor])
 
@@ -207,20 +218,28 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         const highlightElement = target.closest('[data-highlight-id]') as HTMLElement
         
         if (highlightElement) {
+          // Prevent default behavior and stop propagation
+          event.preventDefault()
+          event.stopPropagation()
+          
           const highlightId = highlightElement.getAttribute('data-highlight-id')
+          console.log('🔍 Highlight clicked:', highlightId)
           const highlight = highlights.find(h => h.id === highlightId)
           
           if (highlight) {
+            console.log('🔍 Found highlight:', highlight)
             onHighlightClick(highlight)
+          } else {
+            console.log('🔍 Highlight not found in highlights array')
           }
         }
       }
 
       const editorElement = editor.view.dom
-      editorElement.addEventListener('click', handleClick)
+      editorElement.addEventListener('click', handleClick, true) // Use capture phase
       
       return () => {
-        editorElement.removeEventListener('click', handleClick)
+        editorElement.removeEventListener('click', handleClick, true)
       }
     }, [editor, highlights, onHighlightClick])
 

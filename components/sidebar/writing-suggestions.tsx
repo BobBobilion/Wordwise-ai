@@ -24,16 +24,23 @@ export function WritingSuggestions({
   
   // Scroll to highlighted suggestion when it changes
   useEffect(() => {
+    console.log('🔍 WritingSuggestions: highlightedSuggestionId changed to:', highlightedSuggestionId)
+    
     if (highlightedSuggestionId && suggestionsContainerRef.current) {
+      console.log('🔍 WritingSuggestions: Looking for element with data-suggestion-id:', highlightedSuggestionId)
+      
       const highlightedElement = suggestionsContainerRef.current.querySelector(
         `[data-suggestion-id="${highlightedSuggestionId}"]`
       ) as HTMLElement
+      
+      console.log('🔍 WritingSuggestions: Found element:', highlightedElement)
       
       if (highlightedElement) {
         // Add highlight effect
         highlightedElement.classList.add('ring-2', 'ring-purple-500', 'bg-purple-50')
         
         // Scroll to the element
+        console.log('🔍 WritingSuggestions: Scrolling to element')
         highlightedElement.scrollIntoView({ 
           behavior: 'smooth', 
           block: 'center' 
@@ -43,6 +50,8 @@ export function WritingSuggestions({
         setTimeout(() => {
           highlightedElement.classList.remove('ring-2', 'ring-purple-500', 'bg-purple-50')
         }, 3000)
+      } else {
+        console.log('🔍 WritingSuggestions: Element not found')
       }
     }
   }, [highlightedSuggestionId])
