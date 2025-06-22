@@ -72,11 +72,6 @@ export default function EditorPage() {
     setHighlightedSuggestionId(undefined)
   }, [grammarSuggestions])
 
-  // Debug: Track activeSidebarTab changes
-  useEffect(() => {
-    console.log('🔍 activeSidebarTab state changed to:', activeSidebarTab)
-  }, [activeSidebarTab])
-
   // Automatic grammar checking when content changes (debounced)
   useEffect(() => {
     if (debouncedGrammarCheck && debouncedGrammarCheck.trim() && !isCheckingGrammar && !isHighlightClick) {
@@ -317,78 +312,21 @@ export default function EditorPage() {
   }
 
   const handleHighlightClick = (highlight: HighlightMark) => {
-    console.log('🔍 handleHighlightClick called with highlight:', highlight)
-    
-    // Print to terminal for debugging
-    console.log('🚨 HIGHLIGHT CLICKED IN TERMINAL 🚨')
-    console.log('Highlight ID:', highlight.id)
-    console.log('Highlight Color:', highlight.color)
-    console.log('Highlight Position:', `from ${highlight.from} to ${highlight.to}`)
-    console.log('Timestamp:', new Date().toISOString())
-    console.log('🚨 END HIGHLIGHT CLICK 🚨')
-    
     // Set flag to prevent automatic grammar check during highlight click
     setIsHighlightClick(true)
     
     // Find the corresponding suggestion
-    // Note: highlights and suggestions should have matching positions
     const suggestion = grammarSuggestions.find(s => 
       s.start === highlight.from && s.end === highlight.to && 
       (s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple') === highlight.color
     )
     
-    console.log('🔍 Found suggestion:', suggestion)
-    console.log('🔍 Current grammar suggestions:', grammarSuggestions)
-    console.log('🔍 Current activeSidebarTab before switch:', activeSidebarTab)
-    
-    // Debug: Show all grammar suggestions with their positions
-    console.log('🔍 All grammar suggestions details:')
-    grammarSuggestions.forEach((s, index) => {
-      console.log(`  Suggestion ${index}:`, {
-        text: s.text,
-        start: s.start,
-        end: s.end,
-        type: s.type,
-        color: s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple'
-      })
-    })
-    
-    // Debug: Show highlight details
-    console.log('🔍 Highlight details:', {
-      from: highlight.from,
-      to: highlight.to,
-      color: highlight.color,
-      // No adjustment needed - positions should match directly
-    })
-    
     if (suggestion) {
-      // Print error reference to console
-      console.log('🔍 Harper.js Error Clicked:', {
-        error: suggestion.text,
-        suggestion: suggestion.suggestion,
-        type: suggestion.type,
-        description: suggestion.description,
-        position: `from ${suggestion.start} to ${suggestion.end}`,
-        color: highlight.color,
-        highlightId: highlight.id
-      })
-      
       // Generate suggestion ID that matches the format in WritingSuggestions
       const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
-      console.log('🔍 Generated suggestion ID:', suggestionId)
-      
       // Switch sidebar to writing suggestions tab
-      console.log('🔍 Switching to suggestions tab - calling setActiveSidebarTab("suggestions")')
       setActiveSidebarTab('suggestions')
       setHighlightedSuggestionId(suggestionId)
-      
-      // Debug: Check if the state was updated
-      setTimeout(() => {
-        console.log('🔍 activeSidebarTab after switch (in setTimeout):', activeSidebarTab)
-        console.log('🔍 highlightedSuggestionId after switch (in setTimeout):', highlightedSuggestionId)
-      }, 0)
-    } else {
-      console.log('🔍 No matching suggestion found')
     }
     
     // Reset the flag after a short delay to allow the click to complete

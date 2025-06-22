@@ -71,8 +71,6 @@ const HighlightExtension = Extension.create({
                 return oldState
               }
               
-              console.log('🔍 Highlight plugin applying highlights:', highlights)
-              
               if (!highlights || !Array.isArray(highlights) || highlights.length === 0) {
                 return DecorationSet.empty
               }
@@ -87,7 +85,6 @@ const HighlightExtension = Extension.create({
                   return null
                 }
                 
-                console.log('🔍 Creating decoration for highlight:', highlight)
                 return Decoration.inline(
                   from + 1,
                   to + 1,
@@ -100,7 +97,6 @@ const HighlightExtension = Extension.create({
 
               return DecorationSet.create(tr.doc, decorations)
             } catch (error) {
-              console.error('Error in highlight plugin apply:', error)
               return oldState // Keep old state on error
             }
           },
@@ -110,7 +106,6 @@ const HighlightExtension = Extension.create({
             try {
               return this.getState(state)
             } catch (error) {
-              console.error('Error getting decorations:', error)
               return DecorationSet.empty
             }
           },
@@ -200,7 +195,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
     // Update highlights when they change
     useEffect(() => {
-      console.log('🔍 Updating highlights:', highlights)
       setCurrentHighlights(highlights)
       if (editor) {
         // Use a transaction that doesn't trigger content changes
@@ -223,14 +217,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           event.stopPropagation()
           
           const highlightId = highlightElement.getAttribute('data-highlight-id')
-          console.log('🔍 Highlight clicked:', highlightId)
           const highlight = highlights.find(h => h.id === highlightId)
           
           if (highlight) {
-            console.log('🔍 Found highlight:', highlight)
             onHighlightClick(highlight)
-          } else {
-            console.log('🔍 Highlight not found in highlights array')
           }
         }
       }

@@ -60,16 +60,6 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     // Use external activeTab if provided, otherwise use internal state
     const currentActiveTab = activeTab || internalActiveTab
     
-    // Debug: Log when activeTab changes
-    console.log('🔍 WritingSidebar - activeTab prop:', activeTab)
-    console.log('🔍 WritingSidebar - currentActiveTab:', currentActiveTab)
-    console.log('🔍 WritingSidebar - highlightedSuggestionId:', highlightedSuggestionId)
-    
-    // Debug: Track activeTab prop changes
-    React.useEffect(() => {
-      console.log('🔍 WritingSidebar - activeTab prop changed to:', activeTab)
-    }, [activeTab])
-    
     // Keep references to persist component state across tab switches
     const charactersRef = useRef<HTMLDivElement>(null)
     const plotRef = useRef<HTMLDivElement>(null)
@@ -84,14 +74,9 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     }>(null)
 
     const handleTabChange = (tab: TabType) => {
-      console.log('🔍 WritingSidebar - handleTabChange called with tab:', tab)
-      console.log('🔍 WritingSidebar - onTabChange function exists:', !!onTabChange)
-      
       if (onTabChange) {
-        console.log('🔍 WritingSidebar - Calling external onTabChange')
         onTabChange(tab)
       } else {
-        console.log('🔍 WritingSidebar - Using internal setInternalActiveTab')
         setInternalActiveTab(tab)
       }
     }
@@ -103,7 +88,6 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
       },
       scrollToSuggestion: (suggestion: GrammarSuggestion) => {
         handleTabChange("suggestions")
-        // Scroll to the suggestion after a short delay to ensure the tab is rendered
         setTimeout(() => {
           if (suggestionsRef.current) {
             const suggestionElements = suggestionsRef.current.querySelectorAll('[data-suggestion-id]')
@@ -117,7 +101,6 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
                 behavior: 'smooth', 
                 block: 'center' 
               })
-              // Add a temporary highlight effect
               targetElement.classList.add('bg-yellow-100', 'border-yellow-300')
               setTimeout(() => {
                 targetElement.classList.remove('bg-yellow-100', 'border-yellow-300')

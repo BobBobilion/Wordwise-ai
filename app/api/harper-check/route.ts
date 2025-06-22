@@ -32,7 +32,6 @@ async function initializeLinter() {
       const { LocalLinter, binaryInlined } = await import('harper.js');
       linter = new LocalLinter({ binary: binaryInlined })
       await linter.setup()
-      console.log("Harper.js linter initialized successfully")
     } catch (error) {
       console.error("Failed to initialize Harper.js linter:", error)
       throw error
@@ -136,10 +135,6 @@ function extractNumberFromWasmObject(obj: any, defaultValue: number = 0): number
 
 // Map Harper.js response to our interface
 function mapHarperResponse(harperLints: any[], originalText: string): GrammarSuggestion[] {
-  console.log("=== HARPER.JS RAW RESPONSE ===")
-  console.log("Original text:", originalText)
-  console.log("Number of lints found:", harperLints.length)
-  
   const mappedSuggestions = harperLints.map((lint, index) => {
     let start = 0, end = 0, suggestionsArr: string[] = [], description = '', type: 'grammar' | 'spelling' | 'style' = 'grammar';
     try {
@@ -191,13 +186,6 @@ function mapHarperResponse(harperLints: any[], originalText: string): GrammarSug
     const text = originalText.substring(start, end);
     const typeSafe: 'grammar' | 'spelling' | 'style' = type;
     
-    console.log(`\n--- Lint ${index + 1} ---`);
-    console.log("Description:", description);
-    console.log("Kind:", typeSafe);
-    console.log("Span:", { start, end });
-    console.log("Text found:", text);
-    console.log("Suggestions:", suggestionsArr);
-    
     return {
       text,
       suggestions: suggestionsArr.length > 0 ? suggestionsArr : [text],
@@ -208,10 +196,6 @@ function mapHarperResponse(harperLints: any[], originalText: string): GrammarSug
       description
     };
   })
-  
-  console.log("\n=== MAPPED SUGGESTIONS ===")
-  console.log(JSON.stringify(mappedSuggestions, null, 2))
-  console.log("=== END HARPER.JS LOG ===\n")
   
   return mappedSuggestions
 }
@@ -230,7 +214,6 @@ async function lintText(text: string): Promise<GrammarSuggestion[]> {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
-  console.log("Harper check API called")
   
   try {
     const { text, documentId, previousContent }: HarperCheckRequest = await request.json()
