@@ -54,8 +54,8 @@ export default function EditorPage() {
   const documentId = params.id as string
 
   // Debounce content changes for autosave
-  const debouncedContent = useDebounce(document?.content || "", 2000)
-  const debouncedTitle = useDebounce(document?.title || "", 1000)
+  const debouncedContent = useDebounce(document?.content || "", 5000)
+  const debouncedTitle = useDebounce(document?.title || "", 5000)
 
   // Debounce the document content for automatic grammar checking
   const debouncedGrammarCheck = useDebounce(document?.content || '', 3000)
@@ -69,9 +69,9 @@ export default function EditorPage() {
     }
   }, [documentId, user])
 
-  // Autosave effect
+  // Autosave effect - save every 5 seconds
   useEffect(() => {
-    if (document && (debouncedContent !== document.content || debouncedTitle !== document.title)) {
+    if (document) {
       saveDocument()
     }
   }, [debouncedContent, debouncedTitle])
