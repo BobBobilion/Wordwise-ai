@@ -26,6 +26,48 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [sortOption, setSortOption] = useState<"modified-desc" | "modified-asc" | "created-desc" | "created-asc">("modified-desc")
 
+  // Color mapping functions from sidebar
+  const getMoodColor = (mood: string) => {
+    const colors: Record<string, string> = {
+      happy: "bg-yellow-100 text-yellow-800",
+      sad: "bg-blue-100 text-blue-800",
+      angry: "bg-red-100 text-red-800",
+      mysterious: "bg-purple-100 text-purple-800",
+      romantic: "bg-pink-100 text-pink-800",
+      adventurous: "bg-green-100 text-green-800",
+      tense: "bg-orange-100 text-orange-800",
+      melancholic: "bg-indigo-100 text-indigo-800",
+      hopeful: "bg-emerald-100 text-emerald-800",
+      dark: "bg-gray-800 text-gray-100",
+      peaceful: "bg-teal-100 text-teal-800",
+      exciting: "bg-red-100 text-red-800",
+      nostalgic: "bg-amber-100 text-amber-800",
+      neutral: "bg-gray-100 text-gray-800",
+    }
+    return colors[mood.toLowerCase()] || colors.neutral
+  }
+
+  const getGenreColor = (genre: string) => {
+    const colors: Record<string, string> = {
+      "Science Fiction": "bg-purple-100 text-purple-800",
+      "Fantasy": "bg-indigo-100 text-indigo-800",
+      "Mystery": "bg-gray-100 text-gray-800",
+      "Romance": "bg-pink-100 text-pink-800",
+      "Thriller": "bg-red-100 text-red-800",
+      "Horror": "bg-gray-800 text-gray-100",
+      "Adventure": "bg-green-100 text-green-800",
+      "Historical Fiction": "bg-amber-100 text-amber-800",
+      "Literary Fiction": "bg-blue-100 text-blue-800",
+      "Young Adult": "bg-emerald-100 text-emerald-800",
+      "Children's": "bg-yellow-100 text-yellow-800",
+      "Non-Fiction": "bg-teal-100 text-teal-800",
+      "Biography": "bg-orange-100 text-orange-800",
+      "Memoir": "bg-rose-100 text-rose-800",
+      "General Fiction": "bg-indigo-100 text-indigo-800",
+    }
+    return colors[genre] || colors["General Fiction"]
+  }
+
   useEffect(() => {
     if (user) {
       loadDocuments()
@@ -273,7 +315,7 @@ export default function DashboardPage() {
                 >
                   <div className="p-6 pb-12">
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate flex-1 hover:underline cursor-pointer transition-all duration-200">
                         {doc.title}
                       </h3>
                       <div onClick={(e) => e.stopPropagation()}>
@@ -292,15 +334,21 @@ export default function DashboardPage() {
                       <div className="space-y-2 mb-4">
                         {/* Genre and Mood */}
                         {doc.analysis.writingAnalysis && (
-                          <div className="flex flex-wrap gap-1">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {doc.analysis.writingAnalysis.genre}
-                            </span>
-                            {doc.analysis.writingAnalysis.mood.map((mood, index) => (
-                              <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                {mood}
+                          <div className="space-y-2">
+                            {/* Genre */}
+                            <div className="flex flex-wrap gap-1">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getGenreColor(doc.analysis.writingAnalysis.genre)} transition-all duration-200 hover:scale-102 hover:shadow-md cursor-pointer`}>
+                                {doc.analysis.writingAnalysis.genre}
                               </span>
-                            ))}
+                            </div>
+                            {/* Moods */}
+                            <div className="flex flex-wrap gap-1">
+                              {doc.analysis.writingAnalysis.mood.map((mood, index) => (
+                                <span key={index} className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getMoodColor(mood)} transition-all duration-200 hover:scale-102 hover:shadow-md cursor-pointer`}>
+                                  {mood}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                         
@@ -317,13 +365,6 @@ export default function DashboardPage() {
                           <div className="flex items-center text-xs text-gray-600">
                             <span className="mr-1">📖</span>
                             {doc.analysis.plotSummary.plotSummary.length} plot point{doc.analysis.plotSummary.plotSummary.length !== 1 ? 's' : ''}
-                          </div>
-                        )}
-                        
-                        {/* Last Analyzed */}
-                        {doc.analysis.lastAnalyzed && (
-                          <div className="text-xs text-gray-500">
-                            Analyzed {formatDistanceToNow(doc.analysis.lastAnalyzed, { addSuffix: true })}
                           </div>
                         )}
                       </div>
