@@ -10,6 +10,8 @@ interface WritingSuggestionsProps {
   onApplySuggestion: (suggestion: GrammarSuggestion, replacement: string) => void
   onDismissSuggestion: (suggestion: GrammarSuggestion) => void
   isChecking?: boolean
+  isCheckingGrammar?: boolean
+  isCheckingStyle?: boolean
   highlightedSuggestionId?: string
   onCardClick?: (suggestion: GrammarSuggestion) => void
   selectedCardId?: string | null
@@ -20,6 +22,8 @@ export function WritingSuggestions({
   onApplySuggestion, 
   onDismissSuggestion, 
   isChecking = false,
+  isCheckingGrammar = false,
+  isCheckingStyle = false,
   highlightedSuggestionId,
   onCardClick,
   selectedCardId
@@ -95,12 +99,17 @@ export function WritingSuggestions({
   const grammarIssues = suggestions.filter((s) => s.type === "grammar")
   const styleIssues = suggestions.filter((s) => s.type === "style")
 
-  if (isChecking) {
+  // Show checking state only when grammar/spelling is being checked, not style
+  const isCheckingGrammarOrSpelling = isChecking || isCheckingGrammar
+
+  if (isCheckingGrammarOrSpelling) {
     return (
       <div className="p-4 text-center">
         <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3"></div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Checking...</h3>
-        <p className="text-sm text-gray-600">Analyzing your text with AI.</p>
+        <p className="text-sm text-gray-600">
+          {isCheckingGrammar ? "Checking grammar and spelling..." : "Analyzing your text with AI."}
+        </p>
       </div>
     )
   }
@@ -110,7 +119,7 @@ export function WritingSuggestions({
       <div className="p-4 text-center">
         <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">All Good!</h3>
-        <p className="text-sm text-gray-600">No grammar or spelling issues found.</p>
+        <p className="text-sm text-gray-600">No grammar, spelling, or style issues found.</p>
       </div>
     )
   }
@@ -184,32 +193,59 @@ export function WritingSuggestions({
                     )}
                   </p>
 
-                  <div className="text-sm mb-3">
-                    <span className="font-medium text-gray-700">Found:</span>
-                    <span className="ml-2 line-through text-red-700 bg-red-100 px-2 py-0.5 rounded">{suggestion.text}</span>
-                  </div>
-
-                  {suggestion.suggestions && suggestion.suggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {suggestion.suggestions.slice(0, 3).map((altSuggestion, altIndex) => (
-                        <Button
-                          key={altIndex}
-                          onClick={(e) => {
-                            e.stopPropagation() // Prevent card click
-                            onApplySuggestion(suggestion, altSuggestion)
-                          }}
-                          size="sm"
-                          variant={altIndex === 0 ? 'default' : 'outline'}
-                          className={
-                            altIndex === 0
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
-                              : 'text-blue-600 border-blue-400 hover:bg-blue-50'
-                          }
-                        >
-                          {altSuggestion}
-                        </Button>
-                      ))}
+                  {isStyleIssue ? (
+                    // Style suggestions: show problematic text and single replacement button
+                    <div className="space-y-3">
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">Problematic:</span>
+                        <span className="ml-2 text-red-700 bg-red-100 px-2 py-0.5 rounded">{suggestion.text}</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">Improved:</span>
+                        <span className="ml-2 text-green-700 bg-green-100 px-2 py-0.5 rounded">{suggestion.suggestion}</span>
+                      </div>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation() // Prevent card click
+                          onApplySuggestion(suggestion, suggestion.suggestion)
+                        }}
+                        size="sm"
+                        className="bg-purple-600 text-white hover:bg-purple-700"
+                      >
+                        Apply Style Fix
+                      </Button>
                     </div>
+                  ) : (
+                    // Grammar/Spelling suggestions: show "Found:" text and multiple suggestion buttons
+                    <>
+                      <div className="text-sm mb-3">
+                        <span className="font-medium text-gray-700">Found:</span>
+                        <span className="ml-2 line-through text-red-700 bg-red-100 px-2 py-0.5 rounded">{suggestion.text}</span>
+                      </div>
+
+                      {suggestion.suggestions && suggestion.suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {suggestion.suggestions.slice(0, 3).map((altSuggestion, altIndex) => (
+                            <Button
+                              key={altIndex}
+                              onClick={(e) => {
+                                e.stopPropagation() // Prevent card click
+                                onApplySuggestion(suggestion, altSuggestion)
+                              }}
+                              size="sm"
+                              variant={altIndex === 0 ? 'default' : 'outline'}
+                              className={
+                                altIndex === 0
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : 'text-blue-600 border-blue-400 hover:bg-blue-50'
+                              }
+                            >
+                              {altSuggestion}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

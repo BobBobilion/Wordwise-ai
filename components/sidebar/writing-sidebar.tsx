@@ -26,6 +26,8 @@ interface WritingSidebarProps {
     plotSuggestions?: string[]
     selectedSuggestions?: Set<number>
   }
+  isCheckingGrammar?: boolean
+  isCheckingStyle?: boolean
 }
 
 type TabType = "overview" | "suggestions" | "characters" | "plot"
@@ -57,7 +59,9 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     onCardClick,
     selectedCardId,
     onCharacterNameChange,
-    loadedAnalysisData
+    loadedAnalysisData,
+    isCheckingGrammar,
+    isCheckingStyle
   }, ref) => {
     const [internalActiveTab, setInternalActiveTab] = useState<TabType>("overview")
     
@@ -180,6 +184,8 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
               highlightedSuggestionId={highlightedSuggestionId}
               onCardClick={onCardClick}
               selectedCardId={selectedCardId}
+              isCheckingGrammar={isCheckingGrammar}
+              isCheckingStyle={isCheckingStyle}
             />
           </div>
           

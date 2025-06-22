@@ -36,6 +36,11 @@ export default function EditorPage() {
   const sidebarRef = useRef<WritingSidebarRef>(null)
   const lastCheckedContentRef = useRef<string>('')
   
+  // Style checking state
+  const [styleSuggestions, setStyleSuggestions] = useState<GrammarSuggestion[]>([])
+  const [isCheckingStyle, setIsCheckingStyle] = useState(false)
+  const lastCheckedStyleContentRef = useRef<string>('')
+  
   // Analysis data loading state
   const [loadedAnalysisData, setLoadedAnalysisData] = useState<{
     writingAnalysis?: any
@@ -54,6 +59,9 @@ export default function EditorPage() {
 
   // Debounce the document content for automatic grammar checking
   const debouncedGrammarCheck = useDebounce(document?.content || '', 3000)
+  
+  // Debounce the document content for automatic style checking (5 seconds)
+  const debouncedStyleCheck = useDebounce(document?.content || '', 5000)
 
   useEffect(() => {
     if (documentId && user) {
@@ -83,6 +91,17 @@ export default function EditorPage() {
       }
     }
   }, [debouncedGrammarCheck, isHighlightClick])
+
+  // Automatic style checking when content changes (debounced - 5 seconds)
+  useEffect(() => {
+    if (debouncedStyleCheck && debouncedStyleCheck.trim() && !isCheckingStyle && !isHighlightClick) {
+      // Only check if content has actually changed
+      if (lastCheckedStyleContentRef.current !== debouncedStyleCheck) {
+        lastCheckedStyleContentRef.current = debouncedStyleCheck
+        checkStyle(debouncedStyleCheck)
+      }
+    }
+  }, [debouncedStyleCheck, isHighlightClick])
 
   const loadDocument = async () => {
     try {
@@ -173,7 +192,7 @@ export default function EditorPage() {
     
     if (lengthDifference === 0) return // No position changes needed
     
-    setGrammarSuggestions(prev => prev.map(suggestion => {
+    const updateSuggestions = (suggestions: GrammarSuggestion[]) => suggestions.map(suggestion => {
       // If suggestion is completely before the change, keep it as is
       if (suggestion.end <= changeStart) {
         return suggestion
@@ -194,7 +213,10 @@ export default function EditorPage() {
       }
       
       return suggestion
-    }).filter(Boolean) as GrammarSuggestion[])
+    }).filter(Boolean) as GrammarSuggestion[]
+    
+    setGrammarSuggestions(prev => updateSuggestions(prev))
+    setStyleSuggestions(prev => updateSuggestions(prev))
   }, [])
 
   const checkGrammar = async (content: string) => {
@@ -231,6 +253,81 @@ export default function EditorPage() {
       console.error('Failed to check grammar and spelling:', error)
     } finally {
       setIsCheckingGrammar(false)
+    }
+  }
+
+  const checkStyle = async (content: string) => {
+    if (!content.trim() || isCheckingStyle) return
+
+    // Convert HTML to plain text before sending to style check API
+    const plainText = cleanTextContent(content)
+
+    setIsCheckingStyle(true)
+    try {
+      const response = await fetch('/api/style-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: plainText }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const receivedSuggestions = data.suggestions || []
+
+        const correctedSuggestions = receivedSuggestions.map((suggestion: GrammarSuggestion) => {
+            const { text, start: inaccurateStart } = suggestion
+
+            // The AI isn't perfect at locating text. We use its 'start' as a hint to find the real position.
+            const searchOffset = 100 // Search in a window of 100 chars
+            const searchStartIndex = Math.max(0, inaccurateStart - searchOffset)
+            
+            const foundIndex = plainText.indexOf(text, searchStartIndex)
+
+            // Check if the found text is reasonably close to the original suggestion
+            if (foundIndex !== -1 && Math.abs(foundIndex - inaccurateStart) < (searchOffset * 2)) {
+                return {
+                    ...suggestion,
+                    start: foundIndex,
+                    end: foundIndex + text.length,
+                }
+            }
+            
+            // Fallback: If not found near the hint, try a global search from the beginning.
+            const globalFoundIndex = plainText.indexOf(text)
+            if (globalFoundIndex !== -1) {
+                return {
+                    ...suggestion,
+                    start: globalFoundIndex,
+                    end: globalFoundIndex + text.length
+                }
+            }
+            
+            // If we can't find the text at all, discard the suggestion.
+            return null
+        }).filter(Boolean) as GrammarSuggestion[]
+
+        setStyleSuggestions(correctedSuggestions)
+        
+        // Convert style suggestions to highlights
+        const styleHighlights: HighlightMark[] = correctedSuggestions.map((suggestion, index) => ({
+            from: suggestion.start,
+            to: suggestion.end,
+            color: 'purple',
+            id: `style-${index}-${Date.now()}`,
+        }))
+
+        // To prevent duplicate or stale highlights, remove old style highlights before adding new ones.
+        setHighlights(prev => {
+            const nonStyleHighlights = prev.filter(h => !h.id.startsWith('style-'))
+            return [...nonStyleHighlights, ...styleHighlights]
+        })
+      }
+    } catch (error) {
+      console.error('Failed to check style:', error)
+    } finally {
+      setIsCheckingStyle(false)
     }
   }
 
@@ -293,10 +390,16 @@ export default function EditorPage() {
     // Update suggestion positions for remaining suggestions
     updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, suggestion.suggestion)
     
-    // Remove the applied suggestion from the list
-    setGrammarSuggestions(prev => prev.filter(s => 
-      !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
-    ))
+    // Remove the applied suggestion from the appropriate list
+    if (suggestion.type === 'style') {
+      setStyleSuggestions(prev => prev.filter(s => 
+        !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
+      ))
+    } else {
+      setGrammarSuggestions(prev => prev.filter(s => 
+        !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
+      ))
+    }
   }
 
   const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {
@@ -306,18 +409,24 @@ export default function EditorPage() {
         h.color === (suggestion.type === 'spelling' ? 'red' : suggestion.type === 'grammar' ? 'yellow' : 'purple'))
     ))
     
-    // Remove the suggestion from the list
-    setGrammarSuggestions(prev => prev.filter(s => 
-      !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
-    ))
+    // Remove the suggestion from the appropriate list
+    if (suggestion.type === 'style') {
+      setStyleSuggestions(prev => prev.filter(s => 
+        !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
+      ))
+    } else {
+      setGrammarSuggestions(prev => prev.filter(s => 
+        !(s.start === suggestion.start && s.end === suggestion.end && s.text === suggestion.text)
+      ))
+    }
   }
 
   const handleHighlightClick = (highlight: HighlightMark) => {
     // Set flag to prevent automatic grammar check during highlight click
     setIsHighlightClick(true)
     
-    // Find the corresponding suggestion
-    const suggestion = grammarSuggestions.find(s => 
+    // Find the corresponding suggestion from both grammar and style suggestions
+    const suggestion = [...grammarSuggestions, ...styleSuggestions].find(s => 
       s.start === highlight.from && s.end === highlight.to && 
       (s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple') === highlight.color
     )
@@ -360,7 +469,7 @@ export default function EditorPage() {
 
   // Create persistent highlight for selected card
   const persistentHighlight = selectedCardId ? (() => {
-    const selectedSuggestion = grammarSuggestions.find(s => {
+    const selectedSuggestion = [...grammarSuggestions, ...styleSuggestions].find(s => {
       const suggestionId = `${s.start}-${s.end}-${s.text}`
       return suggestionId === selectedCardId
     })
@@ -384,12 +493,14 @@ export default function EditorPage() {
   }
 
   const handleManualSpellCheck = () => {
-    if (editorRef.current && !isCheckingGrammar) {
+    if (editorRef.current && !isCheckingGrammar && !isCheckingStyle) {
       const currentContent = editorRef.current.getContent()
       if (currentContent && currentContent.trim()) {
-        // Reset last checked content to force a new check
+        // Reset last checked content to force a new check for both grammar and style
         lastCheckedContentRef.current = ''
+        lastCheckedStyleContentRef.current = ''
         checkGrammar(currentContent)
+        checkStyle(currentContent)
       }
     }
   }
@@ -633,7 +744,7 @@ export default function EditorPage() {
           <WritingSidebar
             ref={sidebarRef}
             content={document.content}
-            suggestions={grammarSuggestions}
+            suggestions={[...grammarSuggestions, ...styleSuggestions]}
             onApplySuggestion={handleApplySuggestion}
             onDismissSuggestion={handleDismissSuggestion}
             activeTab={activeSidebarTab}
@@ -643,6 +754,8 @@ export default function EditorPage() {
             selectedCardId={selectedCardId}
             onCharacterNameChange={handleCharacterNameChange}
             loadedAnalysisData={loadedAnalysisData}
+            isCheckingGrammar={isCheckingGrammar}
+            isCheckingStyle={isCheckingStyle}
           />
         </main>
 
