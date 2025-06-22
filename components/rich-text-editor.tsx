@@ -8,6 +8,9 @@ import FontFamily from '@tiptap/extension-font-family'
 import TextStyle from '@tiptap/extension-text-style'
 import Underline from '@tiptap/extension-underline'
 import History from '@tiptap/extension-history'
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { Button } from '@/components/ui/button'
 import { 
   Bold, 
@@ -47,6 +50,68 @@ const CustomTextStyle = TextStyle.extend({
   },
 })
 
+// Custom Highlight extension for error underlines
+const HighlightExtension = Extension.create({
+  name: 'highlight',
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('highlight'),
+        state: {
+          init() {
+            return DecorationSet.empty
+          },
+          apply(tr, oldState) {
+            try {
+              const highlights = tr.getMeta('highlights')
+              
+              if (!highlights || !Array.isArray(highlights) || highlights.length === 0) {
+                return DecorationSet.empty
+              }
+
+              const decorations = highlights.map((highlight: any) => {
+                if (!highlight || typeof highlight !== 'object') {
+                  return null
+                }
+                
+                const { from, to, color, id } = highlight
+                if (typeof from !== 'number' || typeof to !== 'number' || !color || !id) {
+                  return null
+                }
+                
+                return Decoration.inline(
+                  from + 1,
+                  to + 1,
+                  {
+                    class: `highlight-${color}`,
+                    'data-highlight-id': id,
+                  }
+                )
+              }).filter((decoration): decoration is Decoration => decoration !== null)
+
+              return DecorationSet.create(tr.doc, decorations)
+            } catch (error) {
+              console.error('Error in highlight plugin apply:', error)
+              return DecorationSet.empty
+            }
+          },
+        },
+        props: {
+          decorations(state) {
+            try {
+              return this.getState(state)
+            } catch (error) {
+              console.error('Error getting decorations:', error)
+              return DecorationSet.empty
+            }
+          },
+        },
+      }),
+    ]
+  },
+})
+
 interface RichTextEditorProps {
   content: string
   onChange: (content: string) => void
@@ -82,6 +147,7 @@ const FONT_FAMILIES = [
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
   ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick, onSpellCheck, isCheckingGrammar }, ref) => {
     const [cursorPosition, setCursorPosition] = useState<number>(0)
+    const [currentHighlights, setCurrentHighlights] = useState<any[]>([])
     const editorRef = useRef<HTMLDivElement>(null)
 
     const editor = useEditor({
@@ -102,6 +168,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         History.configure({
           depth: 100,
         }),
+        HighlightExtension,
       ],
       content,
       editorProps: {
@@ -122,6 +189,40 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         setCursorPosition(from)
       },
     })
+
+    // Update highlights when they change
+    useEffect(() => {
+      setCurrentHighlights(highlights)
+      if (editor) {
+        editor.view.dispatch(editor.state.tr.setMeta('highlights', highlights))
+      }
+    }, [highlights, editor])
+
+    // Add click handler for highlights
+    useEffect(() => {
+      if (!editor || !onHighlightClick) return
+
+      const handleClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement
+        const highlightElement = target.closest('[data-highlight-id]') as HTMLElement
+        
+        if (highlightElement) {
+          const highlightId = highlightElement.getAttribute('data-highlight-id')
+          const highlight = highlights.find(h => h.id === highlightId)
+          
+          if (highlight) {
+            onHighlightClick(highlight)
+          }
+        }
+      }
+
+      const editorElement = editor.view.dom
+      editorElement.addEventListener('click', handleClick)
+      
+      return () => {
+        editorElement.removeEventListener('click', handleClick)
+      }
+    }, [editor, highlights, onHighlightClick])
 
     // Keyboard shortcuts for undo/redo
     useEffect(() => {
@@ -162,15 +263,29 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
       addHighlight: (from: number, to: number, color: 'red' | 'yellow' | 'purple', id: string) => {
-        // Empty implementation for compatibility
+        const newHighlight = { from, to, color, id }
+        setCurrentHighlights(prev => [...prev, newHighlight])
+        
+        if (editor) {
+          editor.view.dispatch(editor.state.tr.setMeta('highlights', [...currentHighlights, newHighlight]))
+        }
       },
       
       removeHighlight: (id: string) => {
-        // Empty implementation for compatibility
+        setCurrentHighlights(prev => prev.filter(h => h.id !== id))
+        
+        if (editor) {
+          const updatedHighlights = currentHighlights.filter(h => h.id !== id)
+          editor.view.dispatch(editor.state.tr.setMeta('highlights', updatedHighlights))
+        }
       },
       
       clearHighlights: () => {
-        // Empty implementation for compatibility
+        setCurrentHighlights([])
+        
+        if (editor) {
+          editor.view.dispatch(editor.state.tr.setMeta('highlights', []))
+        }
       },
       
       getContent: () => {
@@ -201,7 +316,12 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       },
       
       testHighlight: () => {
-        // Empty implementation for compatibility
+        // Add a test highlight
+        if (editor) {
+          const newHighlight = { from: 0, to: 5, color: 'red' as const, id: 'test-highlight' }
+          setCurrentHighlights(prev => [...prev, newHighlight])
+          editor.view.dispatch(editor.state.tr.setMeta('highlights', [...currentHighlights, newHighlight]))
+        }
       },
       
       replaceText: (from: number, to: number, newText: string) => {
@@ -516,6 +636,68 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
             float: left;
             height: 0;
             pointer-events: none;
+          }
+          
+          /* Highlight styles for error underlines */
+          .highlight-red {
+            border-bottom: 3px solid #ef4444;
+            border-bottom-style: wavy;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .highlight-red:hover {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-bottom-width: 4px;
+          }
+          
+          .highlight-yellow {
+            border-bottom: 3px solid #eab308;
+            border-bottom-style: wavy;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .highlight-yellow:hover {
+            background-color: rgba(234, 179, 8, 0.1);
+            border-bottom-width: 4px;
+          }
+          
+          .highlight-purple {
+            border-bottom: 3px solid #a855f7;
+            border-bottom-style: wavy;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .highlight-purple:hover {
+            background-color: rgba(168, 85, 247, 0.1);
+            border-bottom-width: 4px;
+          }
+          
+          /* Ensure highlights work with different font sizes and styles */
+          .highlight-red, .highlight-yellow, .highlight-purple {
+            text-decoration: none !important;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+          }
+          
+          /* Handle bold text with highlights */
+          .highlight-red strong, .highlight-yellow strong, .highlight-purple strong {
+            border-bottom: inherit;
+            border-bottom-style: inherit;
+          }
+          
+          /* Handle italic text with highlights */
+          .highlight-red em, .highlight-yellow em, .highlight-purple em {
+            border-bottom: inherit;
+            border-bottom-style: inherit;
+          }
+          
+          /* Handle underlined text with highlights */
+          .highlight-red u, .highlight-yellow u, .highlight-purple u {
+            border-bottom: inherit;
+            border-bottom-style: inherit;
           }
         `}</style>
       </div>

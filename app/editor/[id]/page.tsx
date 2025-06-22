@@ -312,8 +312,9 @@ export default function EditorPage() {
 
   const handleHighlightClick = (highlight: HighlightMark) => {
     // Find the corresponding suggestion
+    // Note: highlights are positioned at from+1 and to+1, so we need to subtract 1 for comparison
     const suggestion = grammarSuggestions.find(s => 
-      s.start === highlight.from && s.end === highlight.to && 
+      s.start === (highlight.from - 1) && s.end === (highlight.to - 1) && 
       (s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple') === highlight.color
     )
     
