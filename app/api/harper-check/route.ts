@@ -41,6 +41,99 @@ async function initializeLinter() {
   return linter
 }
 
+// Helper function to safely extract text from WASM objects
+function extractTextFromWasmObject(obj: any): string {
+  if (!obj) return '';
+  
+  try {
+    // If it's already a string, return it
+    if (typeof obj === 'string') {
+      return obj;
+    }
+    
+    // If it's a function, try to call it
+    if (typeof obj === 'function') {
+      try {
+        const result = obj();
+        return extractTextFromWasmObject(result);
+      } catch (e) {
+        console.log('Error calling WASM function:', e);
+        return '';
+      }
+    }
+    
+    // If it's an object, try to access common text properties
+    if (typeof obj === 'object') {
+      // Try common property names
+      const textProps = ['text', 'value', 'content', 'suggestion', 'message', 'description'];
+      for (const prop of textProps) {
+        if (obj[prop] !== undefined) {
+          const extracted = extractTextFromWasmObject(obj[prop]);
+          if (extracted) return extracted;
+        }
+      }
+      
+      // Try toString method
+      if (typeof obj.toString === 'function') {
+        const str = obj.toString();
+        if (str && str !== '[object Object]' && str !== '[object Undefined]' && !str.includes('__wbg_ptr')) {
+          return str;
+        }
+      }
+      
+      // Try to iterate over all properties
+      for (const key in obj) {
+        if (key !== '__wbg_ptr' && typeof obj[key] === 'string' && obj[key].length > 0) {
+          return obj[key];
+        }
+      }
+    }
+    
+    return '';
+  } catch (error) {
+    console.log('Error extracting text from WASM object:', error);
+    return '';
+  }
+}
+
+// Helper function to safely extract numbers from WASM objects
+function extractNumberFromWasmObject(obj: any, defaultValue: number = 0): number {
+  if (!obj) return defaultValue;
+  
+  try {
+    // If it's already a number, return it
+    if (typeof obj === 'number') {
+      return obj;
+    }
+    
+    // If it's a function, try to call it
+    if (typeof obj === 'function') {
+      try {
+        const result = obj();
+        return extractNumberFromWasmObject(result, defaultValue);
+      } catch (e) {
+        console.log('Error calling WASM function for number:', e);
+        return defaultValue;
+      }
+    }
+    
+    // If it's an object, try to access common number properties
+    if (typeof obj === 'object') {
+      const numberProps = ['start', 'end', 'length', 'value', 'index'];
+      for (const prop of numberProps) {
+        if (obj[prop] !== undefined && typeof obj[prop] === 'number') {
+          return obj[prop];
+        }
+      }
+    }
+    
+    return defaultValue;
+  } catch (error) {
+    console.log('Error extracting number from WASM object:', error);
+    return defaultValue;
+  }
+}
+
 // Map Harper.js response to our interface
 function mapHarperResponse(harperLints: any[], originalText: string): GrammarSuggestion[] {
   console.log("=== HARPER.JS RAW RESPONSE ===")
@@ -48,134 +141,55 @@ function mapHarperResponse(harperLints: any[], originalText: string): GrammarSug
   console.log("Number of lints found:", harperLints.length)
   
   const mappedSuggestions = harperLints.map((lint, index) => {
+    let start = 0, end = 0, suggestionsArr = [], description = '', type = 'grammar';
     try {
-      // Get span info
-      let span = lint.span;
-      let start = 0;
-      let end = 0;
-      
-      if (span && typeof span === 'function') {
-        try {
-          span = span();
-          start = span?.start ?? 0;
-          end = span?.end ?? 0;
-        } catch (spanError) {
-          console.log(`Error getting span for lint ${index}:`, spanError);
-          start = 0;
-          end = 0;
-        }
-      } else if (span && typeof span === 'object') {
-        start = span?.start ?? 0;
-        end = span?.end ?? 0;
+      // Call the correct methods on the Lint object
+      let span = { start: 0, end: 0 };
+      if (typeof lint.span === 'function') span = lint.span();
+      if (span && typeof span === 'object') {
+        start = span.start;
+        end = span.end;
       }
-
-      // Get suggestions as strings
-      let suggestionsArr: string[] = [];
       if (typeof lint.suggestions === 'function') {
-        try {
-          const rawSuggestions = lint.suggestions();
-          suggestionsArr = rawSuggestions.map((s: any) => {
-            try {
-              // Try different ways to get the actual text from WASM objects
-              if (typeof s === 'string') {
-                return s;
-              } else if (s && typeof s === 'object') {
-                // Try to access common properties that might contain the text
-                if (s.text !== undefined) return s.text;
-                if (s.value !== undefined) return s.value;
-                if (s.content !== undefined) return s.content;
-                if (s.suggestion !== undefined) return s.suggestion;
-                // If none of the above, try toString but check if it's meaningful
-                const str = s.toString();
-                if (str && str !== '[object Object]' && str !== '[object Undefined]') {
-                  return str;
-                }
-                // Last resort: try to access any string-like property
-                for (const key in s) {
-                  if (typeof s[key] === 'string' && s[key].length > 0) {
-                    return s[key];
-                  }
-                }
-              }
-              return '';
-            } catch (suggestionError) {
-              console.log(`Error converting suggestion:`, suggestionError);
-              return '';
-            }
-          });
-        } catch (suggestionsError) {
-          console.log(`Error getting suggestions for lint ${index}:`, suggestionsError);
-          suggestionsArr = [];
-        }
-      } else if (Array.isArray(lint.suggestions)) {
-        suggestionsArr = lint.suggestions.map((s: any) => {
-          try {
-            // Same logic as above for array suggestions
-            if (typeof s === 'string') {
-              return s;
-            } else if (s && typeof s === 'object') {
-              if (s.text !== undefined) return s.text;
-              if (s.value !== undefined) return s.value;
-              if (s.content !== undefined) return s.content;
-              if (s.suggestion !== undefined) return s.suggestion;
+        const rawSuggestions = lint.suggestions();
+        suggestionsArr = rawSuggestions.map((s: any) => {
+          if (typeof s === 'string') return s;
+          if (typeof s === 'object' && s !== null) {
+            if (typeof s.value === 'function') return s.value();
+            if (typeof s.text === 'function') return s.text();
+            if (typeof s.toString === 'function') {
               const str = s.toString();
-              if (str && str !== '[object Object]' && str !== '[object Undefined]') {
-                return str;
-              }
-              for (const key in s) {
-                if (typeof s[key] === 'string' && s[key].length > 0) {
-                  return s[key];
-                }
-              }
+              if (str && str !== '[object Object]') return str;
             }
-            return '';
-          } catch (suggestionError) {
-            console.log(`Error converting suggestion:`, suggestionError);
-            return '';
           }
-        });
+          return '';
+        }).filter(Boolean);
       }
-      
-      const text = originalText.substring(start, end);
-      const type: 'grammar' | 'spelling' = lint.kind === 'spelling' ? 'spelling' : 'grammar';
-      
-      let description = '';
-      if (lint.problem) {
-        try {
-          description = typeof lint.problem === 'string' ? lint.problem : (typeof lint.problem?.toString === 'function' ? lint.problem.toString() : '');
-        } catch (problemError) {
-          console.log(`Error getting problem for lint ${index}:`, problemError);
-          description = '';
-        }
+      if (typeof lint.message === 'function') description = lint.message();
+      if (typeof lint.kind === 'function') {
+        const kindVal = lint.kind();
+        if (kindVal && kindVal.toLowerCase() === 'spelling') type = 'spelling';
+        else type = 'grammar';
       }
-
-      console.log(`\n--- Lint ${index + 1} ---`)
-      console.log("Problem:", description)
-      console.log("Kind:", lint.kind)
-      console.log("Span:", { start, end })
-      console.log("Text found:", text)
-      console.log("Suggestions:", suggestionsArr)
-      console.log("Raw lint object:", JSON.stringify(lint, null, 2))
-
-      return {
-        text,
-        suggestion: suggestionsArr[0] || text,
-        start,
-        end,
-        type,
-        description
-      }
-    } catch (lintError) {
-      console.log(`Error processing lint ${index}:`, lintError);
-      return {
-        text: '',
-        suggestion: '',
-        start: 0,
-        end: 0,
-        type: 'grammar' as const,
-        description: ''
-      };
+    } catch (e) {
+      console.log('Error extracting lint:', e);
     }
+    const text = originalText.substring(start, end);
+    const typeSafe: 'grammar' | 'spelling' = type === 'spelling' ? 'spelling' : 'grammar';
+    console.log(`\n--- Lint ${index + 1} ---`);
+    console.log("Description:", description);
+    console.log("Kind:", typeSafe);
+    console.log("Span:", { start, end });
+    console.log("Text found:", text);
+    console.log("Suggestions:", suggestionsArr);
+    return {
+      text,
+      suggestion: suggestionsArr[0] || text,
+      start,
+      end,
+      type: typeSafe,
+      description
+    };
   })
   
   console.log("\n=== MAPPED SUGGESTIONS ===")
