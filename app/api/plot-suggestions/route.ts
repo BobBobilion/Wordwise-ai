@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       const { text: responseText } = await generateText({
         model: openai("gpt-4o-mini"),
         system: PLOT_SUGGESTIONS_SYSTEM_PROMPT,
-        prompt: `Based on these plot points, generate ${newSuggestionsCount} immediate plot continuation suggestions that are similar in style, tone, and quality to the selected suggestions below. The new suggestions should match the writing style and narrative approach of the selected ones while providing fresh plot directions.\n\nPlot Points:\n${plotPointsText}\n\nSelected Suggestions (generate similar to these):\n${selectedSuggestionsText}\n\nGenerate ${newSuggestionsCount} new suggestions that are similar in style and quality to the selected ones above:`,
+        prompt: `Based on these plot points, generate ${newSuggestionsCount} immediate plot continuation suggestions that follow similar plot story patterns to the selected suggestions below. Focus on similar narrative developments, character actions, and story progression rather than writing style.\n\nPlot Points:\n${plotPointsText}\n\nSelected Suggestions (generate similar plot developments to these):\n${selectedSuggestionsText}\n\nGenerate ${newSuggestionsCount} new suggestions that follow similar plot story patterns to the selected ones above:`,
         maxTokens: MAX_TOKENS,
         temperature: TEMPERATURE,
       })

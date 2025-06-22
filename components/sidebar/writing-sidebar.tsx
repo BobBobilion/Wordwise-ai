@@ -146,7 +146,7 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
                 >
                   {tab.label}
                   {tab.id === "suggestions" && suggestions.length > 0 && (
-                    <span className="absolute top-2 right-2 bg-red-500 rounded-full w-3 h-3" />
+                    <span className="absolute top-2 right-2 bg-red-500 rounded-full w-[9px] h-[9px]" />
                   )}
                 </button>
                 {index < tabs.length - 1 && (
