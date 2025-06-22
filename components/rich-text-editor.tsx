@@ -121,9 +121,11 @@ interface RichTextEditorProps {
   title: string
   onTitleChange: (title: string) => void
   highlights?: any[]
+  persistentHighlight?: any
   onHighlightClick?: (highlight: any) => void
   onSpellCheck?: () => void
   isCheckingGrammar?: boolean
+  onEditorClick?: () => void
 }
 
 export interface RichTextEditorRef {
@@ -148,7 +150,7 @@ const FONT_FAMILIES = [
 ]
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick, onSpellCheck, isCheckingGrammar }, ref) => {
+  ({ content, onChange, title, onTitleChange, highlights = [], persistentHighlight, onHighlightClick, onSpellCheck, isCheckingGrammar, onEditorClick }, ref) => {
     const [cursorPosition, setCursorPosition] = useState<number>(0)
     const [currentHighlights, setCurrentHighlights] = useState<any[]>([])
     const editorRef = useRef<HTMLDivElement>(null)
@@ -195,13 +197,19 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
     // Update highlights when they change
     useEffect(() => {
-      setCurrentHighlights(highlights)
+      // Combine regular highlights with persistent highlight
+      const allHighlights = [...highlights]
+      if (persistentHighlight) {
+        allHighlights.push(persistentHighlight)
+      }
+      
+      setCurrentHighlights(allHighlights)
       if (editor) {
         // Use a transaction that doesn't trigger content changes
-        const tr = editor.state.tr.setMeta('highlights', highlights)
+        const tr = editor.state.tr.setMeta('highlights', allHighlights)
         editor.view.dispatch(tr)
       }
-    }, [highlights, editor])
+    }, [highlights, persistentHighlight, editor])
 
     // Add click handler for highlights
     useEffect(() => {
@@ -594,6 +602,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         <div 
           ref={editorRef}
           className="border rounded-lg bg-white min-h-[400px] focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500"
+          onClick={onEditorClick}
         >
           <EditorContent editor={editor} />
         </div>
@@ -682,6 +691,31 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           .highlight-purple:hover {
             background-color: rgba(168, 85, 247, 0.1);
             border-bottom-width: 4px;
+          }
+          
+          /* Persistent highlight styles (when cards are selected) */
+          .highlight-red[data-highlight-id^="persistent-"] {
+            background-color: rgba(239, 68, 68, 0.2);
+            border-bottom: 3px solid #ef4444;
+            border-bottom-style: solid;
+            padding: 2px 0;
+            border-radius: 3px;
+          }
+          
+          .highlight-yellow[data-highlight-id^="persistent-"] {
+            background-color: rgba(234, 179, 8, 0.2);
+            border-bottom: 3px solid #eab308;
+            border-bottom-style: solid;
+            padding: 2px 0;
+            border-radius: 3px;
+          }
+          
+          .highlight-purple[data-highlight-id^="persistent-"] {
+            background-color: rgba(168, 85, 247, 0.2);
+            border-bottom: 3px solid #a855f7;
+            border-bottom-style: solid;
+            padding: 2px 0;
+            border-radius: 3px;
           }
           
           /* Ensure highlights work with different font sizes and styles */

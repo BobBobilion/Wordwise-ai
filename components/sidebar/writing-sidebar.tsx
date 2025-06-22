@@ -16,6 +16,8 @@ interface WritingSidebarProps {
   activeTab?: 'overview' | 'suggestions' | 'characters' | 'plot'
   onTabChange?: (tab: 'overview' | 'suggestions' | 'characters' | 'plot') => void
   highlightedSuggestionId?: string
+  onCardClick?: (suggestion: GrammarSuggestion | null) => void
+  selectedCardId?: string | null
   onCharacterNameChange?: (oldName: string, newName: string) => void
   loadedAnalysisData?: {
     writingAnalysis?: any
@@ -52,6 +54,8 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     activeTab,
     onTabChange,
     highlightedSuggestionId,
+    onCardClick,
+    selectedCardId,
     onCharacterNameChange,
     loadedAnalysisData
   }, ref) => {
@@ -174,6 +178,8 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
               onApplySuggestion={onApplySuggestion}
               onDismissSuggestion={onDismissSuggestion}
               highlightedSuggestionId={highlightedSuggestionId}
+              onCardClick={onCardClick}
+              selectedCardId={selectedCardId}
             />
           </div>
           

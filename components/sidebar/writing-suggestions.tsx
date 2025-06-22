@@ -1,7 +1,7 @@
 "use client"
 
 import { CheckCircle, AlertCircle, X } from "lucide-react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { GrammarSuggestion } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 
@@ -11,6 +11,8 @@ interface WritingSuggestionsProps {
   onDismissSuggestion: (suggestion: GrammarSuggestion) => void
   isChecking?: boolean
   highlightedSuggestionId?: string
+  onCardClick?: (suggestion: GrammarSuggestion) => void
+  selectedCardId?: string | null
 }
 
 export function WritingSuggestions({ 
@@ -18,34 +20,76 @@ export function WritingSuggestions({
   onApplySuggestion, 
   onDismissSuggestion, 
   isChecking = false,
-  highlightedSuggestionId
+  highlightedSuggestionId,
+  onCardClick,
+  selectedCardId
 }: WritingSuggestionsProps) {
   const suggestionsContainerRef = useRef<HTMLDivElement>(null)
+  const [localSelectedCardId, setLocalSelectedCardId] = useState<string | null>(null)
+  
+  // Use selectedCardId from props if provided, otherwise use local state
+  const currentSelectedCardId = selectedCardId !== undefined ? selectedCardId : localSelectedCardId
   
   // Scroll to highlighted suggestion when it changes
   useEffect(() => {
-    if (highlightedSuggestionId && suggestionsContainerRef.current) {
-      const highlightedElement = suggestionsContainerRef.current.querySelector(
-        `[data-suggestion-id="${highlightedSuggestionId}"]`
-      ) as HTMLElement
+    if (suggestionsContainerRef.current) {
+      // First, remove any existing highlights from all cards
+      const allCards = suggestionsContainerRef.current.querySelectorAll('[data-suggestion-id]')
+      allCards.forEach(card => {
+        card.classList.remove('border-purple-500', 'border-2')
+      })
       
-      if (highlightedElement) {
-        // Add highlight effect
-        highlightedElement.classList.add('ring-2', 'ring-purple-500', 'bg-purple-50')
+      // Then apply highlight to the new card if one is specified
+      if (highlightedSuggestionId) {
+        const highlightedElement = suggestionsContainerRef.current.querySelector(
+          `[data-suggestion-id="${highlightedSuggestionId}"]`
+        ) as HTMLElement
         
-        // Scroll to the element
-        highlightedElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        })
-        
-        // Remove highlight effect after 3 seconds
-        setTimeout(() => {
-          highlightedElement.classList.remove('ring-2', 'ring-purple-500', 'bg-purple-50')
-        }, 3000)
+        if (highlightedElement) {
+          // Add highlight effect - change border instead of adding ring
+          highlightedElement.classList.add('border-purple-500', 'border-2')
+          
+          // Scroll to the element
+          highlightedElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          })
+        }
       }
     }
   }, [highlightedSuggestionId])
+
+  // Handle card selection
+  const handleCardClick = (suggestion: GrammarSuggestion) => {
+    const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
+    
+    if (onCardClick) {
+      // Use the callback if provided
+      onCardClick(suggestion)
+    } else {
+      // Use local state if no callback provided
+      setLocalSelectedCardId(currentSelectedCardId === suggestionId ? null : suggestionId)
+    }
+  }
+
+  // Clear selection when clicking outside or switching tabs
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsContainerRef.current && !suggestionsContainerRef.current.contains(event.target as Node)) {
+        if (onCardClick) {
+          // Call with null to clear selection
+          onCardClick(null as any)
+        } else {
+          setLocalSelectedCardId(null)
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [onCardClick])
 
   const spellingIssues = suggestions.filter((s) => s.type === "spelling")
   const grammarIssues = suggestions.filter((s) => s.type === "grammar")
@@ -88,6 +132,8 @@ export function WritingSuggestions({
           const isStyleIssue = suggestion.type === "style"
           const isGrammarIssue = suggestion.type === "grammar"
           const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
+          const isSelected = currentSelectedCardId === suggestionId
+          const isHighlighted = highlightedSuggestionId === suggestionId
           
           // Determine colors based on issue type
           let iconColor = "text-red-500"
@@ -111,15 +157,22 @@ export function WritingSuggestions({
           return (
             <div 
               key={index} 
-              className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm transition-all duration-200"
+              className={`bg-white rounded-lg p-3 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md ${
+                isSelected 
+                  ? 'border-purple-500 border-2 bg-purple-50' 
+                  : isHighlighted 
+                    ? 'border-purple-500 border-2' 
+                    : 'border-gray-200'
+              }`}
               data-suggestion-id={suggestionId}
+              onClick={() => handleCardClick(suggestion)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-2">
                     <AlertCircle className={`h-4 w-4 ${iconColor}`} />
                     <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeBgColor}`}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeBgColor} ${badgeTextColor}`}
                     >
                       {suggestion.type}
                     </span>
@@ -141,7 +194,10 @@ export function WritingSuggestions({
                       {suggestion.suggestions.slice(0, 3).map((altSuggestion, altIndex) => (
                         <Button
                           key={altIndex}
-                          onClick={() => onApplySuggestion(suggestion, altSuggestion)}
+                          onClick={(e) => {
+                            e.stopPropagation() // Prevent card click
+                            onApplySuggestion(suggestion, altSuggestion)
+                          }}
                           size="sm"
                           variant={altIndex === 0 ? 'default' : 'outline'}
                           className={
@@ -158,7 +214,10 @@ export function WritingSuggestions({
                 </div>
 
                 <Button
-                  onClick={() => onDismissSuggestion(suggestion)}
+                  onClick={(e) => {
+                    e.stopPropagation() // Prevent card click
+                    onDismissSuggestion(suggestion)
+                  }}
                   size="icon"
                   variant="ghost"
                   className="ml-2 h-8 w-8 text-gray-400 hover:text-gray-600"

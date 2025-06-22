@@ -31,6 +31,7 @@ export default function EditorPage() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<'overview' | 'suggestions' | 'characters' | 'plot'>('overview')
   const [highlightedSuggestionId, setHighlightedSuggestionId] = useState<string | undefined>()
   const [isHighlightClick, setIsHighlightClick] = useState(false)
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const editorRef = useRef<RichTextEditorRef>(null)
   const sidebarRef = useRef<WritingSidebarRef>(null)
   const lastCheckedContentRef = useRef<string>('')
@@ -324,6 +325,10 @@ export default function EditorPage() {
     if (suggestion) {
       // Generate suggestion ID that matches the format in WritingSuggestions
       const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
+      
+      // Set the card as selected to make the highlight persistent
+      setSelectedCardId(suggestionId)
+      
       // Switch sidebar to writing suggestions tab
       setActiveSidebarTab('suggestions')
       setHighlightedSuggestionId(suggestionId)
@@ -333,6 +338,44 @@ export default function EditorPage() {
     setTimeout(() => {
       setIsHighlightClick(false)
     }, 100)
+  }
+
+  const handleCardClick = (suggestion: GrammarSuggestion | null) => {
+    if (suggestion) {
+      // Card was clicked - select it and keep highlight on
+      const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
+      setSelectedCardId(suggestionId)
+      setHighlightedSuggestionId(suggestionId)
+    } else {
+      // Card selection was cleared (clicked outside or switched tabs)
+      setSelectedCardId(null)
+      setHighlightedSuggestionId(undefined)
+    }
+  }
+
+  // Create persistent highlight for selected card
+  const persistentHighlight = selectedCardId ? (() => {
+    const selectedSuggestion = grammarSuggestions.find(s => {
+      const suggestionId = `${s.start}-${s.end}-${s.text}`
+      return suggestionId === selectedCardId
+    })
+    
+    if (selectedSuggestion) {
+      return {
+        from: selectedSuggestion.start,
+        to: selectedSuggestion.end,
+        color: selectedSuggestion.type === 'spelling' ? 'red' : selectedSuggestion.type === 'grammar' ? 'yellow' : 'purple',
+        id: `persistent-${selectedCardId}`
+      }
+    }
+    return null
+  })() : null
+
+  const handleTabChange = (tab: 'overview' | 'suggestions' | 'characters' | 'plot') => {
+    // Clear card selection when switching tabs
+    setSelectedCardId(null)
+    setHighlightedSuggestionId(undefined)
+    setActiveSidebarTab(tab)
   }
 
   const handleManualSpellCheck = () => {
@@ -567,9 +610,14 @@ export default function EditorPage() {
                   title={document.title}
                   onTitleChange={handleTitleChange}
                   highlights={highlights}
+                  persistentHighlight={persistentHighlight}
                   onHighlightClick={handleHighlightClick}
                   onSpellCheck={handleManualSpellCheck}
                   isCheckingGrammar={isCheckingGrammar}
+                  onEditorClick={() => {
+                    setSelectedCardId(null)
+                    setHighlightedSuggestionId(undefined)
+                  }}
                   ref={editorRef}
                 />
               </div>
@@ -582,8 +630,10 @@ export default function EditorPage() {
             onApplySuggestion={handleApplySuggestion}
             onDismissSuggestion={handleDismissSuggestion}
             activeTab={activeSidebarTab}
-            onTabChange={setActiveSidebarTab}
+            onTabChange={handleTabChange}
             highlightedSuggestionId={highlightedSuggestionId}
+            onCardClick={handleCardClick}
+            selectedCardId={selectedCardId}
             onCharacterNameChange={handleCharacterNameChange}
             loadedAnalysisData={loadedAnalysisData}
           />
