@@ -18,7 +18,7 @@ export interface GrammarSuggestion {
   suggestion: string
   start: number
   end: number
-  type: "grammar" | "style"
+  type: "grammar" | "style" | "spelling"
   description?: string
 }
 

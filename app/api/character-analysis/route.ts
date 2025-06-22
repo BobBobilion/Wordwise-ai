@@ -236,12 +236,6 @@ export async function POST(request: NextRequest) {
       temperature: TEMPERATURE,
     })
 
-    // Print the raw AI response to terminal
-    console.log('\n🤖 RAW AI RESPONSE:')
-    console.log('='.repeat(50))
-    console.log(response)
-    console.log('='.repeat(50))
-
     // Validate response
     if (!response || response.trim().length === 0) {
       return NextResponse.json(
@@ -252,13 +246,6 @@ export async function POST(request: NextRequest) {
 
     // Parse the JSON response
     const characters = parseCharacterResponse(response)
-
-    // Print parsed characters to terminal
-    console.log('\n🎭 PARSED CHARACTERS:')
-    console.log('='.repeat(50))
-    console.log(JSON.stringify(characters, null, 2))
-    console.log('='.repeat(50))
-    console.log(`Total characters found: ${characters.length}`)
 
     const finalResponse = { 
       characters,

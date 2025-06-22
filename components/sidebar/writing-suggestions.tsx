@@ -49,8 +49,8 @@ export function WritingSuggestions({
   // Debug logging
   console.log('WritingSuggestions received:', suggestions.length, 'suggestions:', suggestions)
   
-  const spellingIssues = suggestions.filter((s) => s.type === "grammar" && s.description?.toLowerCase().includes("spelling"))
-  const grammarIssues = suggestions.filter((s) => s.type === "grammar" && !s.description?.toLowerCase().includes("spelling"))
+  const spellingIssues = suggestions.filter((s) => s.type === "spelling")
+  const grammarIssues = suggestions.filter((s) => s.type === "grammar")
   const styleIssues = suggestions.filter((s) => s.type === "style")
 
   if (isChecking) {
@@ -86,9 +86,9 @@ export function WritingSuggestions({
 
       <div className="space-y-3 max-h-96 overflow-y-auto" ref={suggestionsContainerRef}>
         {suggestions.map((suggestion, index) => {
-          const isSpellingIssue = suggestion.type === "grammar" && suggestion.description?.toLowerCase().includes("spelling")
+          const isSpellingIssue = suggestion.type === "spelling"
           const isStyleIssue = suggestion.type === "style"
-          const isGrammarIssue = suggestion.type === "grammar" && !suggestion.description?.toLowerCase().includes("spelling")
+          const isGrammarIssue = suggestion.type === "grammar"
           const suggestionId = `${suggestion.start}-${suggestion.end}-${suggestion.text}`
           
           // Determine colors based on issue type
@@ -104,6 +104,10 @@ export function WritingSuggestions({
             iconColor = "text-yellow-500"
             badgeBgColor = "bg-yellow-100"
             badgeTextColor = "text-yellow-700"
+          } else if (isSpellingIssue) {
+            iconColor = "text-red-500"
+            badgeBgColor = "bg-red-100"
+            badgeTextColor = "text-red-700"
           }
           
           return (
@@ -119,7 +123,7 @@ export function WritingSuggestions({
                     <span
                       className={`text-xs px-2 py-1 rounded ${badgeBgColor} ${badgeTextColor}`}
                     >
-                      {isSpellingIssue ? "spelling" : suggestion.type || "grammar"}
+                      {suggestion.type}
                     </span>
                   </div>
 

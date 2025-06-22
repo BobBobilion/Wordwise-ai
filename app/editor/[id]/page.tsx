@@ -62,15 +62,15 @@ export default function EditorPage() {
   }, [grammarSuggestions])
 
   // Automatic grammar checking when content changes (debounced)
-  // useEffect(() => {
-  //   if (debouncedGrammarCheck && debouncedGrammarCheck.trim() && !isCheckingGrammar) {
-  //     // Only check if content has actually changed
-  //     if (lastCheckedContentRef.current !== debouncedGrammarCheck) {
-  //       lastCheckedContentRef.current = debouncedGrammarCheck
-  //       checkGrammar(debouncedGrammarCheck)
-  //     }
-  //   }
-  // }, [debouncedGrammarCheck])
+  useEffect(() => {
+    if (debouncedGrammarCheck && debouncedGrammarCheck.trim() && !isCheckingGrammar) {
+      // Only check if content has actually changed
+      if (lastCheckedContentRef.current !== debouncedGrammarCheck) {
+        lastCheckedContentRef.current = debouncedGrammarCheck
+        checkGrammar(debouncedGrammarCheck)
+      }
+    }
+  }, [debouncedGrammarCheck])
 
   const loadDocument = async () => {
     try {
@@ -148,14 +148,17 @@ export default function EditorPage() {
   const checkGrammar = async (content: string) => {
     if (!content.trim() || isCheckingGrammar) return
 
+    // Convert HTML to plain text before sending to Harper.js
+    const plainText = cleanTextContent(content)
+
     setIsCheckingGrammar(true)
     try {
-      const response = await fetch('/api/grammar-check', {
+      const response = await fetch('/api/harper-check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: content }),
+        body: JSON.stringify({ text: plainText }),
       })
 
       if (response.ok) {
@@ -166,14 +169,14 @@ export default function EditorPage() {
         const newHighlights: HighlightMark[] = data.suggestions.map((suggestion: GrammarSuggestion, index: number) => ({
           from: suggestion.start,
           to: suggestion.end,
-          color: suggestion.type === 'grammar' ? 'red' : 'yellow',
-          id: `grammar-${index}-${Date.now()}`,
+          color: suggestion.type === 'spelling' ? 'red' : suggestion.type === 'grammar' ? 'yellow' : 'purple',
+          id: `harper-${index}-${Date.now()}`,
         }))
         
         setHighlights(newHighlights)
       }
     } catch (error) {
-      console.error('Failed to check grammar:', error)
+      console.error('Failed to check grammar and spelling:', error)
     } finally {
       setIsCheckingGrammar(false)
     }
@@ -247,7 +250,8 @@ export default function EditorPage() {
   const handleDismissSuggestion = (suggestion: GrammarSuggestion) => {
     // Remove the highlight for this suggestion
     setHighlights(prev => prev.filter(h => 
-      !(h.from === suggestion.start && h.to === suggestion.end && h.color === (suggestion.type === 'grammar' ? 'red' : 'yellow'))
+      !(h.from === suggestion.start && h.to === suggestion.end && 
+        h.color === (suggestion.type === 'spelling' ? 'red' : suggestion.type === 'grammar' ? 'yellow' : 'purple'))
     ))
     
     // Remove the suggestion from the list
@@ -260,12 +264,12 @@ export default function EditorPage() {
     // Find the corresponding suggestion
     const suggestion = grammarSuggestions.find(s => 
       s.start === highlight.from && s.end === highlight.to && 
-      (s.type === 'grammar' ? 'red' : 'yellow') === highlight.color
+      (s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple') === highlight.color
     )
     
     if (suggestion) {
       // Print error reference to console
-      console.log('🔍 Spelling Error Clicked:', {
+      console.log('🔍 Harper.js Error Clicked:', {
         error: suggestion.text,
         suggestion: suggestion.suggestion,
         type: suggestion.type,
