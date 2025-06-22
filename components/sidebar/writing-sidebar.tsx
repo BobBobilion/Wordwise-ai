@@ -5,7 +5,7 @@ import { WritingOverview } from "./writing-overview"
 import { WritingSuggestions } from "./writing-suggestions"
 import { CharacterNotebook } from "./character-notebook"
 import { PlotSummary } from "./plot-summary"
-import type { GrammarSuggestion } from "@/lib/types"
+import type { GrammarSuggestion, PlotSummary as PlotSummaryType, Character, WritingAnalysis } from "@/lib/types"
 import React from "react"
 
 interface WritingSidebarProps {
@@ -17,6 +17,13 @@ interface WritingSidebarProps {
   onTabChange?: (tab: 'overview' | 'suggestions' | 'characters' | 'plot') => void
   highlightedSuggestionId?: string
   onCharacterNameChange?: (oldName: string, newName: string) => void
+  loadedAnalysisData?: {
+    writingAnalysis?: any
+    characters?: any[]
+    plotSummary?: any
+    plotSuggestions?: string[]
+    selectedSuggestions?: Set<number>
+  }
 }
 
 type TabType = "overview" | "suggestions" | "characters" | "plot"
@@ -25,6 +32,15 @@ export interface WritingSidebarRef {
   switchToSuggestions: () => void
   scrollToSuggestion: (suggestion: GrammarSuggestion) => void
   getActiveTab: () => TabType
+  getAnalysisData: () => {
+    plotSummary: PlotSummaryType | null
+    characters: Character[] | null
+    writingAnalysis: WritingAnalysis | null
+  }
+  getPlotSuggestionsData: () => {
+    suggestions: string[]
+    selectedSuggestions: Set<number>
+  } | null
 }
 
 export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>(
@@ -36,7 +52,8 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     activeTab,
     onTabChange,
     highlightedSuggestionId,
-    onCharacterNameChange
+    onCharacterNameChange,
+    loadedAnalysisData
   }, ref) => {
     const [internalActiveTab, setInternalActiveTab] = useState<TabType>("overview")
     
@@ -47,6 +64,14 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
     const charactersRef = useRef<HTMLDivElement>(null)
     const plotRef = useRef<HTMLDivElement>(null)
     const suggestionsRef = useRef<HTMLDivElement>(null)
+
+    // Refs to child components to access their data
+    const overviewRef = useRef<{ getAnalysisData: () => WritingAnalysis | null }>(null)
+    const charactersRefChild = useRef<{ getAnalysisData: () => Character[] | null }>(null)
+    const plotRefChild = useRef<{ 
+      getAnalysisData: () => PlotSummaryType | null
+      getSuggestionsData: () => { suggestions: string[]; selectedSuggestions: Set<number> } | null 
+    }>(null)
 
     const handleTabChange = (tab: TabType) => {
       if (onTabChange) {
@@ -86,7 +111,13 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
           }
         }, 100)
       },
-      getActiveTab: () => currentActiveTab
+      getActiveTab: () => currentActiveTab,
+      getAnalysisData: () => ({
+        plotSummary: plotRefChild.current?.getAnalysisData() || null,
+        characters: charactersRefChild.current?.getAnalysisData() || null,
+        writingAnalysis: overviewRef.current?.getAnalysisData() || null,
+      }),
+      getPlotSuggestionsData: () => plotRefChild.current?.getSuggestionsData() || null
     }), [currentActiveTab, handleTabChange])
 
     const tabs = [
@@ -129,7 +160,11 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
         {/* Tab Content - Keep all components mounted but show/hide them */}
         <div className="flex-1 overflow-y-auto bg-white/30 relative">
           <div className={`${currentActiveTab === "overview" ? "block" : "hidden"} h-full`}>
-            <WritingOverview content={content} />
+            <WritingOverview 
+              content={content} 
+              ref={overviewRef}
+              loadedAnalysisData={loadedAnalysisData?.writingAnalysis}
+            />
           </div>
           
           <div 
@@ -148,14 +183,25 @@ export const WritingSidebar = forwardRef<WritingSidebarRef, WritingSidebarProps>
             ref={charactersRef}
             className={`${currentActiveTab === "characters" ? "block" : "hidden"} h-full`}
           >
-            <CharacterNotebook content={content} onCharacterNameChange={onCharacterNameChange} />
+            <CharacterNotebook 
+              content={content} 
+              onCharacterNameChange={onCharacterNameChange} 
+              ref={charactersRefChild}
+              loadedAnalysisData={loadedAnalysisData?.characters}
+            />
           </div>
           
           <div 
             ref={plotRef}
             className={`${currentActiveTab === "plot" ? "block" : "hidden"} h-full`}
           >
-            <PlotSummary content={content} />
+            <PlotSummary 
+              content={content} 
+              ref={plotRefChild}
+              loadedAnalysisData={loadedAnalysisData?.plotSummary}
+              loadedPlotSuggestions={loadedAnalysisData?.plotSuggestions}
+              loadedSelectedSuggestions={loadedAnalysisData?.selectedSuggestions}
+            />
           </div>
         </div>
       </div>

@@ -283,9 +283,52 @@ export default function DashboardPage() {
                     <p className="text-sm text-purple-600 font-medium mb-2">
                       Modified {formatDistanceToNow(doc.updatedAt, { addSuffix: true })}
                     </p>
-                    <p className="text-sm text-gray-600 line-clamp-3">
+                    <p className="text-sm text-gray-600 line-clamp-3 mb-3">
                       {doc.content.replace(/<[^>]*>/g, "").substring(0, 150)}...
                     </p>
+                    
+                    {/* Analysis Information */}
+                    {doc.analysis && (
+                      <div className="space-y-2 mb-4">
+                        {/* Genre and Mood */}
+                        {doc.analysis.writingAnalysis && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {doc.analysis.writingAnalysis.genre}
+                            </span>
+                            {doc.analysis.writingAnalysis.mood.map((mood, index) => (
+                              <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {mood}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Character Count */}
+                        {doc.analysis.characters && doc.analysis.characters.length > 0 && (
+                          <div className="flex items-center text-xs text-gray-600">
+                            <span className="mr-1">👥</span>
+                            {doc.analysis.characters.length} character{doc.analysis.characters.length !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                        
+                        {/* Plot Summary Status */}
+                        {doc.analysis.plotSummary && (
+                          <div className="flex items-center text-xs text-gray-600">
+                            <span className="mr-1">📖</span>
+                            {doc.analysis.plotSummary.plotSummary.length} plot point{doc.analysis.plotSummary.plotSummary.length !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                        
+                        {/* Last Analyzed */}
+                        {doc.analysis.lastAnalyzed && (
+                          <div className="text-xs text-gray-500">
+                            Analyzed {formatDistanceToNow(doc.analysis.lastAnalyzed, { addSuffix: true })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     <button
                       className="absolute bottom-4 right-4 p-2 rounded-full hover:bg-red-100 text-red-600 z-10 transition-colors duration-200"
                       onClick={e => { e.stopPropagation(); handleDeleteClick(doc.id) }}

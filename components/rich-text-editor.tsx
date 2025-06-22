@@ -26,25 +26,13 @@ import {
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-// Custom extensions
-import { Extension } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { Decoration, DecorationSet } from '@tiptap/pm/view'
-
-interface HighlightMark {
-  from: number
-  to: number
-  color: 'red' | 'yellow' | 'purple'
-  id: string
-}
-
 interface RichTextEditorProps {
   content: string
   onChange: (content: string) => void
   title: string
   onTitleChange: (title: string) => void
-  highlights?: HighlightMark[]
-  onHighlightClick?: (highlight: HighlightMark) => void
+  highlights?: any[]
+  onHighlightClick?: (highlight: any) => void
   onSpellCheck?: () => void
   isCheckingGrammar?: boolean
 }
@@ -63,74 +51,6 @@ export interface RichTextEditorRef {
   findAndReplaceText: (oldText: string, newText: string, startPosition?: number) => { success: boolean; position?: number }
 }
 
-// Custom Highlight Extension
-const HighlightExtension = Extension.create({
-  name: 'highlight',
-
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    }
-  },
-
-  addGlobalAttributes() {
-    return [
-      {
-        types: ['textStyle'],
-        attributes: {
-          highlight: {
-            default: null,
-            parseHTML: element => element.getAttribute('data-highlight'),
-            renderHTML: attributes => {
-              if (!attributes.highlight) {
-                return {}
-              }
-              return {
-                'data-highlight': attributes.highlight,
-                class: `highlight-${attributes.highlight}`,
-              }
-            },
-          },
-        },
-      },
-    ]
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('highlight'),
-        state: {
-          init() {
-            return DecorationSet.empty
-          },
-          apply(tr, oldState) {
-            const highlights = tr.getMeta('highlights') as HighlightMark[] || []
-            
-            if (highlights.length === 0) {
-              return DecorationSet.empty
-            }
-
-            const decorations = highlights.map(highlight => 
-              Decoration.inline(highlight.from, highlight.to, {
-                class: `highlight-${highlight.color}`,
-                'data-highlight-id': highlight.id,
-              })
-            )
-
-            return DecorationSet.create(tr.doc, decorations)
-          },
-        },
-        props: {
-          decorations(state) {
-            return this.getState(state)
-          },
-        },
-      }),
-    ]
-  },
-})
-
 // Font families
 const FONT_FAMILIES = [
   { label: 'Arial', value: 'Arial, sans-serif' },
@@ -140,7 +60,6 @@ const FONT_FAMILIES = [
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
   ({ content, onChange, title, onTitleChange, highlights = [], onHighlightClick, onSpellCheck, isCheckingGrammar }, ref) => {
-    const [currentHighlights, setCurrentHighlights] = useState<HighlightMark[]>(highlights)
     const [cursorPosition, setCursorPosition] = useState<number>(0)
     const editorRef = useRef<HTMLDivElement>(null)
 
@@ -151,6 +70,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         }),
         TextAlign.configure({
           types: ['heading', 'paragraph'],
+          alignments: ['left', 'center', 'right', 'justify'],
+          defaultAlignment: 'left',
         }),
         FontFamily.configure({
           types: ['textStyle'],
@@ -160,7 +81,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         History.configure({
           depth: 100,
         }),
-        HighlightExtension,
       ],
       content,
       editorProps: {
@@ -175,19 +95,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         // Store cursor position
         const { from } = editor.state.selection
         setCursorPosition(from)
-        
-        // Clear highlights that overlap with edited text
-        const newHighlights = currentHighlights.filter(highlight => {
-          const hasOverlap = editor.state.doc.textBetween(
-            Math.max(0, highlight.from - 1),
-            Math.min(editor.state.doc.content.size, highlight.to + 1)
-          ).length > 0
-          return hasOverlap
-        })
-        
-        if (newHighlights.length !== currentHighlights.length) {
-          setCurrentHighlights(newHighlights)
-        }
       },
       onSelectionUpdate: ({ editor }) => {
         const { from } = editor.state.selection
@@ -211,6 +118,18 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           event.preventDefault()
           editor.chain().focus().redo().run()
         }
+
+        // Prevent Ctrl+Shift+L and Ctrl+Shift+R from triggering text alignment
+        // Allow browser defaults for these shortcuts
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'l' || event.key === 'L')) {
+          event.stopPropagation()
+          // Don't prevent default - let browser handle it
+        }
+        
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'r' || event.key === 'R')) {
+          event.stopPropagation()
+          // Don't prevent default - let browser handle it
+        }
       }
 
       document.addEventListener('keydown', handleKeyDown)
@@ -222,45 +141,15 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
       addHighlight: (from: number, to: number, color: 'red' | 'yellow' | 'purple', id: string) => {
-        if (!editor) return
-        
-        // Get the current document text content
-        const docText = editor.state.doc.textContent
-        
-        // Validate positions
-        if (from < 0 || to > docText.length || from >= to) {
-          console.warn('Invalid highlight positions:', { from, to, docLength: docText.length })
-          return
-        }
-        
-        const newHighlight: HighlightMark = { from, to, color, id }
-        setCurrentHighlights(prev => [...prev, newHighlight])
-        
-        // Store current cursor position
-        const currentPos = editor.state.selection.from
-        
-        // Apply highlight to editor using ProseMirror decorations
-        const tr = editor.state.tr
-        tr.setMeta('highlights', [...currentHighlights, newHighlight])
-        editor.view.dispatch(tr)
-        
-        // Restore cursor position
-        setTimeout(() => {
-          editor.commands.setTextSelection(currentPos)
-        }, 0)
+        // Empty implementation for compatibility
       },
       
       removeHighlight: (id: string) => {
-        setCurrentHighlights(prev => prev.filter(h => h.id !== id))
+        // Empty implementation for compatibility
       },
       
       clearHighlights: () => {
-        setCurrentHighlights([])
-        if (editor) {
-          const tr = editor.state.tr
-          tr.setMeta('highlights', [])
-          editor.view.dispatch(tr)
-        }
+        // Empty implementation for compatibility
       },
       
       getContent: () => {
@@ -291,29 +180,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       },
       
       testHighlight: () => {
-        if (!editor) return
-        
-        const docText = editor.state.doc.textContent
-        console.log('Test highlight - Document text:', {
-          length: docText.length,
-          preview: docText.substring(0, 50) + '...'
-        })
-        
-        // Add a test highlight at the beginning
-        const testHighlight: HighlightMark = {
-          from: 0,
-          to: Math.min(10, docText.length),
-          color: 'red',
-          id: 'test-highlight'
-        }
-        
-        console.log('Adding test highlight:', testHighlight)
-        
-        setCurrentHighlights([testHighlight])
-        
-        const tr = editor.state.tr
-        tr.setMeta('highlights', [testHighlight])
-        editor.view.dispatch(tr)
+        // Empty implementation for compatibility
       },
       
       replaceText: (from: number, to: number, newText: string) => {
@@ -396,97 +263,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         return { success: true, position: actualStart }
       },
     }))
-
-    // Apply highlights when they change
-    useEffect(() => {
-      if (!editor || highlights.length === 0) return
-      
-      // Get the current document text content
-      const docText = editor.state.doc.textContent
-      
-      console.log('Applying highlights:', {
-        highlights,
-        docTextLength: docText.length,
-        docTextPreview: docText.substring(0, 100) + '...'
-      })
-      
-      // Validate and filter highlights
-      const validHighlights = highlights.filter(highlight => {
-        if (highlight.from < 0 || highlight.to > docText.length || highlight.from >= highlight.to) {
-          console.warn('Invalid highlight positions:', { 
-            from: highlight.from, 
-            to: highlight.to, 
-            docLength: docText.length,
-            highlight 
-          })
-          return false
-        }
-        
-        // Log the text being highlighted
-        const highlightedText = docText.substring(highlight.from, highlight.to)
-        console.log('Highlighting text:', {
-          from: highlight.from,
-          to: highlight.to,
-          text: highlightedText,
-          color: highlight.color
-        })
-        
-        return true
-      })
-      
-      if (validHighlights.length === 0) return
-      
-      setCurrentHighlights(validHighlights)
-      
-      // Store current cursor position
-      const currentPos = editor.state.selection.from
-      
-      // Apply highlights using ProseMirror decorations
-      const tr = editor.state.tr
-      tr.setMeta('highlights', validHighlights)
-      editor.view.dispatch(tr)
-      
-      // Restore cursor position
-      setTimeout(() => {
-        editor.commands.setTextSelection(currentPos)
-      }, 0)
-    }, [highlights, editor])
-
-    // Handle highlight clicks
-    const handleHighlightClick = useCallback((event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      
-      // Check if the clicked element has a highlight mark
-      const hasHighlight = target.hasAttribute('data-highlight') || 
-                          target.classList.contains('highlight-red') ||
-                          target.classList.contains('highlight-yellow') ||
-                          target.classList.contains('highlight-purple')
-      
-      if (hasHighlight) {
-        const highlightColor = target.getAttribute('data-highlight') || 
-                              (target.classList.contains('highlight-red') ? 'red' :
-                               target.classList.contains('highlight-yellow') ? 'yellow' :
-                               target.classList.contains('highlight-purple') ? 'purple' : null)
-        
-        if (highlightColor && onHighlightClick) {
-          // Find the highlight by color and position
-          const highlight = currentHighlights.find(h => h.color === highlightColor)
-          if (highlight) {
-            onHighlightClick(highlight)
-          }
-        }
-      }
-    }, [currentHighlights, onHighlightClick])
-
-    useEffect(() => {
-      const editorElement = editorRef.current
-      if (editorElement) {
-        editorElement.addEventListener('click', handleHighlightClick)
-        return () => {
-          editorElement.removeEventListener('click', handleHighlightClick)
-        }
-      }
-    }, [handleHighlightClick])
 
     if (!editor) {
       return <div>Loading editor...</div>
@@ -706,32 +482,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           </BubbleMenu>
         )}
 
-        {/* Highlight Styles */}
+        {/* Editor Styles */}
         <style jsx global>{`
-          .highlight-red {
-            border-bottom: 2px solid #ef4444;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-          }
-          .highlight-red:hover {
-            background-color: rgba(239, 68, 68, 0.3);
-          }
-          .highlight-yellow {
-            border-bottom: 2px solid #eab308;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-          }
-          .highlight-yellow:hover {
-            background-color: rgba(234, 179, 8, 0.3);
-          }
-          .highlight-purple {
-            border-bottom: 2px solid #9333ea;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-          }
-          .highlight-purple:hover {
-            background-color: rgba(147, 51, 234, 0.3);
-          }
           .ProseMirror {
             outline: none;
             min-height: 400px;

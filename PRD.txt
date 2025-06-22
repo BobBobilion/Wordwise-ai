@@ -46,59 +46,23 @@
 [ ] Implement preview and confirmation pop-up
 [ ] Replace all occurrences of character name in document
 [X] Phase 4: Implementation Layer
-[X] Implement AI-powered grammar and style correction
-[X] Replaced local grammar libraries with GPT-4o-Mini API integration
-[X] Implemented 5-word text segmentation for optimal token usage
-[X] Added smart triggers: after 5th word completion or 3-second pause
-[X] Implemented in-memory caching for unchanged text segments
-[X] Added sessionStorage for dismissed suggestions (per session)
-[X] Show inline grammar, spelling, and punctuation suggestions via AI
-[X] Show AI-powered style suggestions (clarity, active voice, etc.)
-[X] Implement dismiss functionality for suggestions
-[X] Allow users to dismiss individual suggestions to prevent them from reappearing
-[X] Track dismissed suggestions with unique ID hashing
-[X] Automatically clear dismissed suggestions when text is modified
-[X] Created smart grammar check hook (useSmartGrammarCheck)
-[X] Optimized API calls to stay within 1000 token limit
-[X] Added loading states and error handling for AI suggestions
-[X] **MIGRATED TO HARPER.JS** - Replaced AI-based grammar/spelling with Harper.js
-[X] Implemented unified `/api/harper-check` endpoint for both spelling and grammar
-[X] Added dynamic import for Harper.js to avoid SSR issues
-[X] Configured Next.js WebAssembly support for Harper.js WASM files
-[X] Updated frontend components to use unified Harper.js API
-[X] Modified suggestion display to handle spelling, grammar, and style types
-[X] Updated highlight system to properly color-code spelling (red), grammar (yellow), style (purple)
-[X] Achieved <20ms processing time with Harper.js (vs 500ms-2s with AI)
-[X] Eliminated AI API costs for grammar/spelling checking
-[X] Enhanced privacy with server-side processing (no text sent to external services)
-[X] Build AI-powered "Overview" tab
-[X] Highlight any section of text for analysis
-[X] Use AI to analyze mood and tone
-[X] Display emoji/icon for mood summary
-[X] Display top 3 moods with confidence scores
-[ ] Use AI to analyze pacing
-[ ] Show visual pacing indicator for 250-word chunks
-[ ] Use color coding: dark blue (too slow), green (good), red (too fast)
-[X] Build "Plot Analysis" tab
-[X] Implement chat interface with LLM context awareness
-[X] Use current document and character context to suggest plot ideas
-[X] Store full suggestion/chat history with timestamps
-[X] Implement tension-based plot visualization
-[X] Create interactive line chart showing plot tension over time
-[X] Use AI to assign tension scores (0-100) to each plot point
-[X] Display numbered plot points with clickable nodes on chart
-[X] Add hover effects showing plot point text
-[X] Implement click-to-highlight functionality between chart and plot summary
-[X] Replace bullet points with numbered plot summary list
-[X] Add visual highlighting for selected plot points
-[X] Use Recharts library for smooth, responsive chart rendering
-[ ] Build "Inspiration" tab
-[ ] Analyze user text for theme, style, and tone
-[ ] Query Google Books API for 5 similar works
-[ ] Display results with title, author, genre, publication date, avg rating
-[X] Build sidebar layout
-[X] Display editor on left, feature tabs on right
-[X] Use tabs to switch between Overview, Plot, Characters, Inspiration
+[X] Implement AI-powered writing assistance
+[X] Add grammar checking with Harper.js
+[X] Integrate OpenAI API for advanced analysis
+[X] Create writing suggestions system
+[X] Build plot analysis and summary generation
+[X] Implement character detection and analysis
+[X] Add mood and genre detection
+[X] Create tension-based plot visualization
+[X] Build interactive plot suggestions
+[X] Implement analysis data persistence
+[X] Save plot summary, character analysis, and writing overview to Firebase
+[X] Display analysis information in dashboard document cards
+[X] Update document schema to include analysis data
+[X] Implement automatic analysis data collection and saving
+[X] Load saved analysis data when opening documents
+[X] Automatically populate sidebar components with saved data
+[X] Restore plot suggestions and selected suggestions state
 [X] Phase 5: Enhanced Dashboard Features
 [X] Add search bar for document titles
 [X] Implement sort by most recently modified
@@ -106,6 +70,8 @@
 [X] Add download button (.docx) to each document card
 [X] Add upload button supporting .doc, .docx, and .txt files
 [X] Add delete button with verification dialog to each document card
+[X] Display analysis metadata in document cards
+[X] Show genre, mood, character count, and plot summary status
 [X] Phase 6: Enhanced Editor Features
 [X] Add download button with multiple format options (.txt, .docx, .pdf)
 [X] Add keyboard shortcut support (Ctrl+S to save)

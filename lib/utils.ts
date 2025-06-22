@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { DocumentAnalysis, PlotSummary, Character, WritingAnalysis } from "./types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -142,4 +143,35 @@ function downloadBlob(blob: Blob, filename: string) {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Collects analysis data from sidebar components and prepares it for saving
+ */
+export function collectAnalysisData(
+  plotSummaryData: PlotSummary | null,
+  charactersData: Character[] | null,
+  writingAnalysisData: WritingAnalysis | null
+): DocumentAnalysis | undefined {
+  const analysis: DocumentAnalysis = {}
+  
+  if (plotSummaryData) {
+    analysis.plotSummary = plotSummaryData
+  }
+  
+  if (charactersData && charactersData.length > 0) {
+    analysis.characters = charactersData
+  }
+  
+  if (writingAnalysisData) {
+    analysis.writingAnalysis = writingAnalysisData
+  }
+  
+  // Only return analysis if we have at least one type of data
+  if (Object.keys(analysis).length > 0) {
+    analysis.lastAnalyzed = new Date()
+    return analysis
+  }
+  
+  return undefined
 }

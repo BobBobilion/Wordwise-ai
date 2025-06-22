@@ -85,7 +85,7 @@ export function WritingSuggestions({
         </div>
       </div>
 
-      <div className="space-y-3 max-h-96 overflow-y-auto" ref={suggestionsContainerRef}>
+      <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto" ref={suggestionsContainerRef}>
         {suggestions.map((suggestion, index) => {
           const isSpellingIssue = suggestion.type === "spelling"
           const isStyleIssue = suggestion.type === "style"
@@ -174,15 +174,24 @@ export function WritingSuggestions({
         })}
       </div>
 
-      {/* Accept All Button */}
+      {/* Accept All and Deny All Buttons */}
       {suggestions.length > 0 && (
         <div className="pt-4 mt-4 border-t border-gray-200">
-          <Button
-            onClick={() => suggestions.forEach(s => onApplySuggestion(s, s.suggestion))}
-            className="w-full bg-blue-600 hover:bg-blue-700"
-          >
-            Accept All ({suggestions.length} suggestions)
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              onClick={() => suggestions.forEach(s => onApplySuggestion(s, s.suggestion))}
+              className="bg-blue-600 hover:bg-blue-700 text-sm"
+            >
+              Accept All ({suggestions.length})
+            </Button>
+            <Button
+              onClick={() => suggestions.forEach(s => onDismissSuggestion(s))}
+              variant="outline"
+              className="border-red-300 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-400 hover:text-red-600 text-sm"
+            >
+              Deny All
+            </Button>
+          </div>
         </div>
       )}
     </div>

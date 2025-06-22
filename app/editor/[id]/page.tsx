@@ -15,7 +15,7 @@ import { ArrowLeft, Save, Loader2, BookOpen } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { useDebounce } from "@/hooks/use-debounce"
 import { DownloadButton } from "@/components/ui/download-button"
-import { cleanTextContent } from "@/lib/utils"
+import { cleanTextContent, collectAnalysisData } from "@/lib/utils"
 
 export default function EditorPage() {
   const params = useParams()
@@ -33,6 +33,16 @@ export default function EditorPage() {
   const editorRef = useRef<RichTextEditorRef>(null)
   const sidebarRef = useRef<WritingSidebarRef>(null)
   const lastCheckedContentRef = useRef<string>('')
+  
+  // Analysis data loading state
+  const [loadedAnalysisData, setLoadedAnalysisData] = useState<{
+    writingAnalysis?: any
+    characters?: any[]
+    plotSummary?: any
+    plotSuggestions?: string[]
+    selectedSuggestions?: Set<number>
+  } | undefined>(undefined)
+  const [analysisDataLoaded, setAnalysisDataLoaded] = useState(false)
 
   const documentId = params.id as string
 
@@ -88,6 +98,23 @@ export default function EditorPage() {
       }
 
       setDocument(doc)
+      
+      // Extract saved analysis data
+      if (doc.analysis) {
+        const analysisData = {
+          writingAnalysis: doc.analysis.writingAnalysis,
+          characters: doc.analysis.characters,
+          plotSummary: doc.analysis.plotSummary,
+          plotSuggestions: doc.analysis.plotSuggestions || [],
+          selectedSuggestions: doc.analysis.selectedSuggestions ? new Set(doc.analysis.selectedSuggestions as number[]) : new Set<number>()
+        }
+        console.log('Loading saved analysis data:', analysisData)
+        setLoadedAnalysisData(analysisData)
+        setAnalysisDataLoaded(true)
+      } else {
+        setLoadedAnalysisData(undefined)
+        setAnalysisDataLoaded(false)
+      }
     } catch (error) {
       toast.error("Failed to load document")
     } finally {
@@ -101,9 +128,32 @@ export default function EditorPage() {
     setSaving(true)
     try {
       const cleanedContent = cleanTextContent(document.content)
+      
+      // Collect analysis data from sidebar components
+      let analysisData = undefined
+      if (sidebarRef.current) {
+        const analysis = sidebarRef.current.getAnalysisData()
+        analysisData = collectAnalysisData(
+          analysis.plotSummary,
+          analysis.characters,
+          analysis.writingAnalysis
+        )
+        
+        // Add plot suggestions and selected suggestions if available
+        if (analysisData && sidebarRef.current.getPlotSuggestionsData) {
+          const plotSuggestionsData = sidebarRef.current.getPlotSuggestionsData()
+          if (plotSuggestionsData) {
+            analysisData.plotSuggestions = plotSuggestionsData.suggestions
+            analysisData.selectedSuggestions = Array.from(plotSuggestionsData.selectedSuggestions)
+            console.log('Saving plot suggestions data:', plotSuggestionsData)
+          }
+        }
+      }
+      
       await updateDocument(documentId, {
         title: document.title,
         content: cleanedContent,
+        analysis: analysisData
       })
       setLastSaved(new Date())
     } catch (error) {
@@ -182,7 +232,7 @@ export default function EditorPage() {
     }
   }
 
-  const handleApplySuggestion = (suggestion: GrammarSuggestion, replacementText: string) => {
+  const handleApplySuggestion = (suggestion: GrammarSuggestion) => {
     if (!editorRef.current || !document) return
 
     // Get the editor instance
@@ -193,11 +243,11 @@ export default function EditorPage() {
     
     // ✅ FIXED: Use exact position-based replacement with the chosen replacement text
     try {
-      editor.replaceText(suggestion.start + 1, suggestion.end + 1, replacementText)
+      editor.replaceText(suggestion.start + 1, suggestion.end + 1, suggestion.suggestion)
     } catch (error) {
       // Fallback: if position-based replacement fails, try text search
       console.warn('Position-based replacement failed, falling back to text search for:', suggestion.text)
-      const searchResult = editor.findAndReplaceText(suggestion.text, replacementText, suggestion.start)
+      const searchResult = editor.findAndReplaceText(suggestion.text, suggestion.suggestion, suggestion.start)
       
       if (!searchResult.success) {
         toast.error(`Could not find the text "${suggestion.text}" at the expected position. It may have been already corrected or removed.`)
@@ -211,7 +261,7 @@ export default function EditorPage() {
     
     // Calculate the length difference between original text and suggestion
     const originalLength = suggestion.text.length
-    const newLength = replacementText.length
+    const newLength = suggestion.suggestion.length
     const lengthDifference = newLength - originalLength
     
     // Update highlight positions for highlights that come after the change
@@ -239,7 +289,7 @@ export default function EditorPage() {
     }).filter(Boolean) as HighlightMark[])
     
     // Update suggestion positions for remaining suggestions
-    updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, replacementText)
+    updateSuggestionPositions(oldContent, newContent, suggestion.start, suggestion.end, suggestion.suggestion)
     
     // Remove the applied suggestion from the list
     setGrammarSuggestions(prev => prev.filter(s => 
@@ -538,6 +588,7 @@ export default function EditorPage() {
             onTabChange={setActiveSidebarTab}
             highlightedSuggestionId={highlightedSuggestionId}
             onCharacterNameChange={handleCharacterNameChange}
+            loadedAnalysisData={loadedAnalysisData}
           />
         </main>
 
