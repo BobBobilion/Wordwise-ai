@@ -618,6 +618,8 @@ export default function EditorPage() {
                     setSelectedCardId(null)
                     setHighlightedSuggestionId(undefined)
                   }}
+                  grammarSuggestions={grammarSuggestions}
+                  onApplySuggestion={handleApplySuggestion}
                   ref={editorRef}
                 />
               </div>

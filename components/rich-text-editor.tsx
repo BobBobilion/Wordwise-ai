@@ -126,6 +126,8 @@ interface RichTextEditorProps {
   onSpellCheck?: () => void
   isCheckingGrammar?: boolean
   onEditorClick?: () => void
+  grammarSuggestions?: any[]
+  onApplySuggestion?: (suggestion: any, replacement: string) => void
 }
 
 export interface RichTextEditorRef {
@@ -150,9 +152,16 @@ const FONT_FAMILIES = [
 ]
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ content, onChange, title, onTitleChange, highlights = [], persistentHighlight, onHighlightClick, onSpellCheck, isCheckingGrammar, onEditorClick }, ref) => {
+  ({ content, onChange, title, onTitleChange, highlights = [], persistentHighlight, onHighlightClick, onSpellCheck, isCheckingGrammar, onEditorClick, grammarSuggestions, onApplySuggestion }, ref) => {
     const [cursorPosition, setCursorPosition] = useState<number>(0)
     const [currentHighlights, setCurrentHighlights] = useState<any[]>([])
+    const [suggestionMenu, setSuggestionMenu] = useState<{
+      visible: boolean
+      x: number
+      y: number
+      suggestion: any
+      highlight: any
+    } | null>(null)
     const editorRef = useRef<HTMLDivElement>(null)
 
     const editor = useEditor({
@@ -211,6 +220,11 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       }
     }, [highlights, persistentHighlight, editor])
 
+    // Clean up suggestion menu when suggestions change
+    useEffect(() => {
+      setSuggestionMenu(null)
+    }, [grammarSuggestions])
+
     // Add click handler for highlights
     useEffect(() => {
       if (!editor || !onHighlightClick) return
@@ -228,7 +242,35 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           const highlight = highlights.find(h => h.id === highlightId)
           
           if (highlight) {
+            // Show suggestion menu
+            const rect = highlightElement.getBoundingClientRect()
+            const suggestion = grammarSuggestions?.find(s => 
+              s.start === highlight.from && s.end === highlight.to &&
+              (s.type === 'spelling' ? 'red' : s.type === 'grammar' ? 'yellow' : 'purple') === highlight.color
+            )
+            
+            if (suggestion && suggestion.suggestions && suggestion.suggestions.length > 0) {
+              // Position like bubble menu - center on the text
+              const editorRect = editor.view.dom.getBoundingClientRect()
+              const x = rect.left - editorRect.left + (rect.width / 2)
+              const y = rect.top - editorRect.top
+              
+              setSuggestionMenu({
+                visible: true,
+                x: x,
+                y: y,
+                suggestion,
+                highlight
+              })
+            }
+            
             onHighlightClick(highlight)
+          }
+        } else {
+          // Only hide if clicking outside the suggestion menu itself
+          const suggestionMenuElement = target.closest('[data-suggestion-menu]')
+          if (!suggestionMenuElement) {
+            setSuggestionMenu(null)
           }
         }
       }
@@ -239,7 +281,26 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       return () => {
         editorElement.removeEventListener('click', handleClick, true)
       }
-    }, [editor, highlights, onHighlightClick])
+    }, [editor, highlights, onHighlightClick, grammarSuggestions])
+
+    // Add global click handler to hide menu when clicking outside
+    useEffect(() => {
+      const handleGlobalClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement
+        const suggestionMenuElement = target.closest('[data-suggestion-menu]')
+        const highlightElement = target.closest('[data-highlight-id]')
+        
+        if (!suggestionMenuElement && !highlightElement) {
+          setSuggestionMenu(null)
+        }
+      }
+
+      document.addEventListener('click', handleGlobalClick)
+      
+      return () => {
+        document.removeEventListener('click', handleGlobalClick)
+      }
+    }, [])
 
     // Keyboard shortcuts for undo/redo
     useEffect(() => {
@@ -601,10 +662,41 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         {/* Editor Content */}
         <div 
           ref={editorRef}
-          className="border rounded-lg bg-white min-h-[400px] focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500"
+          className="relative border rounded-lg bg-white min-h-[400px] focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500"
           onClick={onEditorClick}
         >
           <EditorContent editor={editor} />
+          
+          {/* Suggestion Preview Menu */}
+          {suggestionMenu && suggestionMenu.visible && (
+            <div
+              data-suggestion-menu="true"
+              className="absolute z-50 flex items-center gap-2 p-3 bg-white border rounded-lg shadow-lg"
+              style={{
+                left: `${suggestionMenu.x}px`,
+                top: `${suggestionMenu.y - 0}px`,
+                transform: 'translateX(-50%) translateY(-100%)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="text-sm text-gray-600">
+                <span className="line-through text-red-600">{suggestionMenu.suggestion.text}</span>
+                <span className="mx-2">→</span>
+                <button
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    if (onApplySuggestion) {
+                      onApplySuggestion(suggestionMenu.suggestion, suggestionMenu.suggestion.suggestions[0])
+                    }
+                    setSuggestionMenu(null)
+                  }}
+                  className="text-green-600 font-medium hover:text-green-700 hover:bg-green-50 px-2 py-1 rounded-md border border-green-300 hover:border-green-400 bg-green-50 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
+                >
+                  {suggestionMenu.suggestion.suggestions[0]}
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Bubble Menu for quick formatting */}
